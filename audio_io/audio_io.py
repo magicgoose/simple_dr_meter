@@ -3,18 +3,39 @@ import subprocess as sp
 
 import sys
 from subprocess import DEVNULL, PIPE
-from typing import NamedTuple, Iterator
+from typing import NamedTuple, Iterator, List, Sequence
 
 import numpy as np
+from os import path
 
 ex_ffprobe = 'ffprobe'
 ex_ffmpeg = 'ffmpeg'
+
+from enum import Enum, auto
+
+
+class FileKind(Enum):
+    CUE = auto()
+    AUDIO = auto()
+
+
+def get_file_kind(in_path: str) -> FileKind:
+    _, ext = path.splitext(in_path)
+    if '.cue' == ext.lower():
+        return FileKind.CUE
+    return FileKind.AUDIO
+
+
+class TrackInfo(NamedTuple):
+    name: str
+    offset_samples: int
 
 
 class AudioSourceInfo(NamedTuple):
     path: str
     channel_count: int
     sample_rate: int
+    tracks: Sequence[TrackInfo]
 
 
 class AudioSource(NamedTuple):
@@ -23,12 +44,23 @@ class AudioSource(NamedTuple):
     blocks_generator: Iterator[np.ndarray]
 
 
-def read_audio_info(in_path: str) -> AudioSourceInfo:
-    channel_count, sample_rate = _get_params(in_path)
-    if channel_count < 1 or sample_rate < 8000:
-        sys.exit('invalid format: channels={}, sample_rate={}'.format(channel_count, sample_rate))
-    # noinspection PyArgumentList
-    return AudioSourceInfo(in_path, channel_count, sample_rate)
+# if input file is a cue, it can reference multiple audio files with different sample rates.
+# therefore the result is a sequence.
+def read_audio_info(in_path: str) -> Sequence[AudioSourceInfo]:
+    kind = get_file_kind(in_path)
+    if kind == FileKind.CUE:
+        raise NotImplementedError
+    elif kind == FileKind.AUDIO:
+        channel_count, sample_rate = _get_params(in_path)
+        if channel_count < 1 or sample_rate < 8000:
+            sys.exit('invalid format: channels={}, sample_rate={}'.format(channel_count, sample_rate))
+
+        # noinspection PyArgumentList
+        track_info = TrackInfo(name='', offset_samples=0)
+        # noinspection PyArgumentList
+        return (AudioSourceInfo(in_path, channel_count, sample_rate, (track_info,)),)
+    else:
+        raise NotImplementedError
 
 
 def read_audio_data(what: AudioSourceInfo, samples_per_block: int) -> AudioSource:
