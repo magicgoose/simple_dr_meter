@@ -51,16 +51,19 @@ def read_audio_info(in_path: str) -> Sequence[AudioSourceInfo]:
     if kind == FileKind.CUE:
         raise NotImplementedError
     elif kind == FileKind.AUDIO:
-        channel_count, sample_rate = _get_params(in_path)
-        if channel_count < 1 or sample_rate < 8000:
-            sys.exit('invalid format: channels={}, sample_rate={}'.format(channel_count, sample_rate))
-
-        # noinspection PyArgumentList
+        channel_count, sample_rate = _get_audio_properties(in_path)
         track_info = TrackInfo(name='', offset_samples=0)
-        # noinspection PyArgumentList
-        return (AudioSourceInfo(in_path, channel_count, sample_rate, (track_info,)),)
+        return [AudioSourceInfo(in_path, channel_count, sample_rate, [track_info])]
     else:
         raise NotImplementedError
+
+
+def _get_audio_properties(in_path):
+    channel_count, sample_rate = _get_params(in_path)
+    if channel_count < 1 or sample_rate < 8000:
+        sys.exit('invalid format: channels={}, sample_rate={}'.format(channel_count, sample_rate))
+
+    return channel_count, sample_rate
 
 
 def read_audio_data(what: AudioSourceInfo, samples_per_block: int) -> AudioSource:
