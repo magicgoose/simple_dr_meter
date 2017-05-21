@@ -1,12 +1,15 @@
 import re
 import subprocess as sp
 
+import chardet
+
 import sys
 from subprocess import DEVNULL, PIPE
-from typing import NamedTuple, Iterator, List, Sequence
+from typing import NamedTuple, Iterator, Sequence
 
 import numpy as np
 from os import path
+
 
 ex_ffprobe = 'ffprobe'
 ex_ffmpeg = 'ffmpeg'
@@ -17,6 +20,14 @@ from enum import Enum, auto
 class FileKind(Enum):
     CUE = auto()
     AUDIO = auto()
+
+
+class CueCmd(Enum):
+    PERFORMER = auto()
+    TITLE = auto()
+    FILE = auto()
+    TRACK = auto()
+    INDEX = auto()
 
 
 def get_file_kind(in_path: str) -> FileKind:
@@ -44,11 +55,63 @@ class AudioSource(NamedTuple):
     blocks_generator: Iterator[np.ndarray]
 
 
-# if input file is a cue, it can reference multiple audio files with different sample rates.
-# therefore the result is a sequence.
+_whitespace_pattern = re.compile('\s+')
+
+
+def _unquote(s: str):
+    return s[1+s.index('"'):s.rindex('"')]
+
+
+def parse_cd_time(offset: str) -> Number:
+    """parse time in CDDA (75fps) format to seconds, exactly"""
+
+    pass
+
+
+def _parse_cue_cmd(line: str):
+    line = line.strip()
+    cmd, args = _whitespace_pattern.split(line, 1)
+    if cmd == 'PERFORMER':
+        return (CueCmd.PERFORMER, _unquote(args))
+    if cmd == 'TITLE':
+        return (CueCmd.TITLE, _unquote(args))
+    if cmd == 'FILE':
+        return (CueCmd.FILE, _unquote(args))
+    if cmd == 'TRACK':
+        number, _ = _whitespace_pattern.split(args, 1)
+        number = int(number)
+        return (CueCmd.TRACK, number)
+    if cmd == 'INDEX':
+        number, offset = _whitespace_pattern.split(args, 1)
+        number = int(number)
+        offset = parse_cd_time(offset)
+
+    return None
+
+
+def parse_cue(in_path):
+    """returns all entries of CUE and True when done"""
+    # detect file encoding
+    with open(in_path, 'rb') as f:
+        raw = f.read(32)  # at most 32 bytes are returned
+        encoding = chardet.detect(raw)['encoding']
+    with open(in_path, 'r', encoding=encoding) as f:
+        for line in f:
+            cmd = _parse_cue_cmd(line)
+            if cmd:
+                yield cmd
+        yield True
+
+
 def read_audio_info(in_path: str) -> Sequence[AudioSourceInfo]:
+    """
+    if input file is a cue, it can reference multiple audio files with different sample rates.
+    therefore the result is a sequence.
+    """
     kind = get_file_kind(in_path)
     if kind == FileKind.CUE:
+        for cue_cmd in parse_cue(in_path):
+            print(cue_cmd)
         raise NotImplementedError
     elif kind == FileKind.AUDIO:
         channel_count, sample_rate = _get_audio_properties(in_path)
@@ -68,7 +131,6 @@ def _get_audio_properties(in_path):
 
 def read_audio_data(what: AudioSourceInfo, samples_per_block: int) -> AudioSource:
     audio_blocks = _read_audio_blocks(what.path, what.channel_count, samples_per_block)
-    # noinspection PyArgumentList
     return AudioSource(what, samples_per_block, audio_blocks)
 
 
