@@ -1,5 +1,6 @@
 import re
 import subprocess as sp
+from collections import OrderedDict
 from fractions import Fraction
 from numbers import Number
 
@@ -7,10 +8,12 @@ import chardet
 
 import sys
 from subprocess import DEVNULL, PIPE
-from typing import NamedTuple, Iterator, Sequence
+from typing import NamedTuple, Iterator, Sequence, Iterable
 
 import numpy as np
 from os import path
+
+import os
 
 ex_ffprobe = 'ffprobe'
 ex_ffmpeg = 'ffmpeg'
@@ -29,6 +32,7 @@ class CueCmd(Enum):
     FILE = auto()
     TRACK = auto()
     INDEX = auto()
+    EOF = auto()
 
 
 def get_file_kind(in_path: str) -> FileKind:
@@ -45,6 +49,8 @@ class TrackInfo(NamedTuple):
 
 class AudioSourceInfo(NamedTuple):
     path: str
+    name: str
+    performers: Sequence[str]
     channel_count: int
     sample_rate: int
     tracks: Sequence[TrackInfo]
@@ -103,19 +109,72 @@ def parse_cue(in_path):
             cmd = _parse_cue_cmd(line)
             if cmd:
                 yield cmd
-        yield True
+        yield CueCmd.EOF, None
 
 
-def read_audio_info(in_path: str) -> Sequence[AudioSourceInfo]:
+def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
+    last_title = None
+    index_number = None
+    index_offset = None
+    file_title = None
+    last_file_path = None
+    channel_count = None
+    sample_rate = None
+
+    tracks = []
+
+    join = os.path.join
+
+    for cmd, *args in cue_items:
+        if cmd == CueCmd.TRACK or cmd == CueCmd.FILE or cmd == CueCmd.EOF:
+            if index_number:
+                assert last_title is not None
+                assert index_offset is not None
+                # noinspection PyTypeChecker
+                tracks.append(TrackInfo(last_title, index_offset))
+                index_number = None
+            if cmd == CueCmd.TRACK:
+                continue
+
+        if cmd == CueCmd.FILE or cmd == CueCmd.EOF:
+            if last_file_path:
+                yield AudioSourceInfo(
+                    last_file_path,
+                    file_title,
+                    (),
+                    channel_count,
+                    sample_rate,
+                    tracks)
+                tracks = []
+            if cmd == CueCmd.EOF:
+                return
+
+            file_title = last_title
+            last_file_path = join(directory_path, args[0])
+            channel_count, sample_rate = _get_audio_properties(last_file_path)
+        elif cmd == CueCmd.TITLE:
+            last_title = args[0]
+        elif cmd == CueCmd.INDEX:
+            number, offset = args
+            if not index_number or index_number > number:
+                index_number, index_offset = number, int(sample_rate * offset)
+        elif cmd == CueCmd.PERFORMER:
+            continue  # TODO
+        else:
+            raise NotImplementedError
+
+
+def read_audio_info(in_path: str) -> Iterable[AudioSourceInfo]:
     """
     if input file is a cue, it can reference multiple audio files with different sample rates.
     therefore the result is a sequence.
     """
     kind = get_file_kind(in_path)
     if kind == FileKind.CUE:
-        for cue_cmd in parse_cue(in_path):
-            print(cue_cmd)
-        raise NotImplementedError
+        # for cue_cmd in parse_cue(in_path):
+        #     print(cue_cmd)
+        directory_path = os.path.dirname(in_path)
+        return _translate_from_cue(directory_path, parse_cue(in_path))
     elif kind == FileKind.AUDIO:
         channel_count, sample_rate = _get_audio_properties(in_path)
         track_info = TrackInfo(name='', offset_samples=0)
