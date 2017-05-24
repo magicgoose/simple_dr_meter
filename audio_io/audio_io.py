@@ -113,13 +113,15 @@ def parse_cue(in_path):
 
 
 def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
-    last_title = None
     index_number = None
     index_offset = None
-    file_title = None
     last_file_path = None
     channel_count = None
     sample_rate = None
+
+    track_start = False  # if parser is between TRACK and INDEX commands
+    last_title_file = None
+    last_title_track = None
 
     tracks = []
 
@@ -128,19 +130,20 @@ def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
     for cmd, *args in cue_items:
         if cmd == CueCmd.TRACK or cmd == CueCmd.FILE or cmd == CueCmd.EOF:
             if index_number:
-                assert last_title is not None
+                assert last_title_track is not None
                 assert index_offset is not None
                 # noinspection PyTypeChecker
-                tracks.append(TrackInfo(last_title, index_offset))
+                tracks.append(TrackInfo(last_title_track, index_offset))
                 index_number = None
             if cmd == CueCmd.TRACK:
+                track_start = True
                 continue
 
         if cmd == CueCmd.FILE or cmd == CueCmd.EOF:
             if last_file_path:
                 yield AudioSourceInfo(
                     last_file_path,
-                    file_title,
+                    last_title_file,
                     (),
                     channel_count,
                     sample_rate,
@@ -149,17 +152,20 @@ def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
             if cmd == CueCmd.EOF:
                 return
 
-            file_title = last_title
             last_file_path = join(directory_path, args[0])
             channel_count, sample_rate = _get_audio_properties(last_file_path)
         elif cmd == CueCmd.TITLE:
-            last_title = args[0]
+            if track_start:
+                last_title_track = args[0]
+            else:
+                last_title_file = args[0]
         elif cmd == CueCmd.INDEX:
+            track_start = False
             number, offset = args
             if not index_number or index_number > number:
                 index_number, index_offset = number, int(sample_rate * offset)
         elif cmd == CueCmd.PERFORMER:
-            continue  # TODO
+            continue  # TODO make use of performers
         else:
             raise NotImplementedError
 
@@ -171,8 +177,6 @@ def read_audio_info(in_path: str) -> Iterable[AudioSourceInfo]:
     """
     kind = get_file_kind(in_path)
     if kind == FileKind.CUE:
-        # for cue_cmd in parse_cue(in_path):
-        #     print(cue_cmd)
         directory_path = os.path.dirname(in_path)
         return _translate_from_cue(directory_path, parse_cue(in_path))
     elif kind == FileKind.AUDIO:
