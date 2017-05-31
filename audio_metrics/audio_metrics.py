@@ -1,9 +1,10 @@
-from typing import NamedTuple
+from typing import NamedTuple, Iterator
 
 import numpy as np
 from math import floor
 
 from audio_io import AudioSource
+from audio_io.audio_io import AudioSourceInfo
 
 
 class DynamicRangeMetrics(NamedTuple):
@@ -12,9 +13,11 @@ class DynamicRangeMetrics(NamedTuple):
     rms: np.ndarray
 
 
-def _calc_block_metrics(src: AudioSource):
-    for a in src.blocks_generator:
+def _calc_block_metrics(samples: Iterator[np.ndarray]):
+    total_length = 0
+    for a in samples:
         length = a.shape[1]
+        total_length += length
 
         a = np.ascontiguousarray(a)
         peaks = np.max(np.abs(a), axis=1)
@@ -25,11 +28,12 @@ def _calc_block_metrics(src: AudioSource):
         rms = np.sqrt(2.0 * sum_sqr / length)
         yield from peaks
         yield from rms
+    print(total_length)
 
 
-def compute_dr(a: AudioSource) -> DynamicRangeMetrics:
-    channel_count = a.source_info.channel_count
-    metrics = np.fromiter(_calc_block_metrics(a), dtype='<f4').reshape((
+def compute_dr(a: AudioSourceInfo, samples: Iterator[np.ndarray]) -> DynamicRangeMetrics:
+    channel_count = a.channel_count
+    metrics = np.fromiter(_calc_block_metrics(samples), dtype='<f4').reshape((
         -1,  # number of block
         2,  # peak, rms
         channel_count
