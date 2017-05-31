@@ -2,13 +2,14 @@ import re
 import subprocess as sp
 from collections import OrderedDict
 from fractions import Fraction
+from io import SEEK_CUR
 from numbers import Number
 
 import chardet
 
 import sys
 from subprocess import DEVNULL, PIPE
-from typing import NamedTuple, Iterator, Sequence, Iterable
+from typing import NamedTuple, Iterator, Sequence, Iterable, List
 
 import numpy as np
 from os import path
@@ -59,7 +60,7 @@ class AudioSourceInfo(NamedTuple):
 class AudioSource(NamedTuple):
     source_info: AudioSourceInfo
     samples_per_block: int
-    blocks_generator: Iterator[np.ndarray]
+    blocks_generator: Iterator[Iterator[np.ndarray]]
 
 
 _whitespace_pattern = re.compile('\s+')
@@ -196,7 +197,7 @@ def _get_audio_properties(in_path):
 
 
 def read_audio_data(what: AudioSourceInfo, samples_per_block: int) -> AudioSource:
-    audio_blocks = _read_audio_blocks(what.path, what.channel_count, samples_per_block)
+    audio_blocks = _read_audio_blocks(what.path, what.channel_count, samples_per_block, what.tracks)
     return AudioSource(what, samples_per_block, audio_blocks)
 
 
@@ -236,8 +237,10 @@ def _get_params(in_path):
     return _parse_audio_params(out)
 
 
-def _read_audio_blocks(in_path, channel_count, block_samples):
-    bytes_per_block = 4 * channel_count * block_samples
+def _read_audio_blocks(in_path, channel_count, block_samples, tracks: List[TrackInfo]):
+    bytes_per_sample = 4 * channel_count
+    max_bytes_per_block = bytes_per_sample * block_samples
+
     p = sp.Popen(
         (ex_ffmpeg, '-v', 'error',
          '-i', in_path,
@@ -248,19 +251,48 @@ def _read_audio_blocks(in_path, channel_count, block_samples):
         stderr=None,
         stdout=PIPE)
 
+    sample_type = np.dtype('<f4')
+    frombuffer = np.frombuffer
+    reshape = np.reshape
+    max_buffer = bytearray(max_bytes_per_block)
     with p.stdout as f:
         readinto = type(f).readinto
-        buffer = bytearray(bytes_per_block)
-        frombuffer = np.frombuffer
-        reshape = np.reshape
 
-        sample_type = np.dtype('<f4')
+        skip_samples = tracks[0].offset_samples
+        if skip_samples > 0:
+            f.seek(bytes_per_sample * skip_samples, SEEK_CUR)
 
-        while True:
-            read_size = readinto(f, buffer)
-            if not read_size:
-                break
 
-            a = frombuffer(buffer, dtype=sample_type, count=read_size // 4)
+        def make_array(buffer, size):
+            a = frombuffer(buffer, dtype=sample_type, count=size // 4)
             a = reshape(a, (channel_count, -1), order='F')
-            yield a
+            return a
+
+
+        def read_samples(n):
+            """n = number of samples to read"""
+            while n >= max_bytes_per_block:
+                read_size = readinto(f, max_buffer)
+                if read_size > 0:
+                    yield make_array(max_buffer, read_size)
+                else:
+                    return
+            if n > 0:
+                tmp_buffer_size = n * bytes_per_sample
+                tmp_buffer = bytearray(tmp_buffer_size)
+                read_size = readinto(f, tmp_buffer)
+                assert read_size == tmp_buffer_size
+                yield make_array(tmp_buffer, read_size)
+
+        # for ti, t in enumerate(tracks):
+        #     track_offset = t.offset_samples
+
+
+        # while True:
+        #     read_size = readinto(f, max_buffer)
+        #     if not read_size:
+        #         break
+        #
+        #     a = frombuffer(max_buffer, dtype=sample_type, count=read_size // 4)
+        #     a = reshape(a, (channel_count, -1), order='F')
+        #     yield a
