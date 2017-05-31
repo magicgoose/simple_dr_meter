@@ -237,9 +237,9 @@ def _get_params(in_path):
     return _parse_audio_params(out)
 
 
-def _read_audio_blocks(in_path, channel_count, block_samples, tracks: List[TrackInfo]) -> Iterator[Iterator[np.ndarray]]:
+def _read_audio_blocks(in_path, channel_count, samples_per_block, tracks: List[TrackInfo]) -> Iterator[Iterator[np.ndarray]]:
     bytes_per_sample = 4 * channel_count
-    max_bytes_per_block = bytes_per_sample * block_samples
+    max_bytes_per_block = bytes_per_sample * samples_per_block
 
     p = sp.Popen(
         (ex_ffmpeg, '-v', 'error',
@@ -288,5 +288,5 @@ def _read_audio_blocks(in_path, channel_count, block_samples, tracks: List[Track
             if track_count == ti + 1:
                 read_count = None
             else:
-                read_count = tracks[ti + 1].offset_samples - tracks[ti].offset_samples
+                read_count = (tracks[ti + 1].offset_samples - tracks[ti].offset_samples) * bytes_per_sample
             yield read_samples(read_count)
