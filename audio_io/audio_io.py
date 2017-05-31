@@ -54,7 +54,7 @@ class AudioSourceInfo(NamedTuple):
     performers: Sequence[str]
     channel_count: int
     sample_rate: int
-    tracks: Sequence[TrackInfo]
+    tracks: List[TrackInfo]
 
 
 class AudioSource(NamedTuple):
@@ -237,7 +237,7 @@ def _get_params(in_path):
     return _parse_audio_params(out)
 
 
-def _read_audio_blocks(in_path, channel_count, block_samples, tracks: List[TrackInfo]):
+def _read_audio_blocks(in_path, channel_count, block_samples, tracks: List[TrackInfo]) -> Iterator[Iterator[np.ndarray]]:
     bytes_per_sample = 4 * channel_count
     max_bytes_per_block = bytes_per_sample * block_samples
 
