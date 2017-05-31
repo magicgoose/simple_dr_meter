@@ -262,37 +262,31 @@ def _read_audio_blocks(in_path, channel_count, block_samples, tracks: List[Track
         if skip_samples > 0:
             f.seek(bytes_per_sample * skip_samples, SEEK_CUR)
 
-
         def make_array(buffer, size):
             a = frombuffer(buffer, dtype=sample_type, count=size // 4)
             a = reshape(a, (channel_count, -1), order='F')
             return a
 
-
         def read_samples(n):
-            """n = number of samples to read"""
-            while n >= max_bytes_per_block:
+            while (n is None) or (n >= max_bytes_per_block):
                 read_size = readinto(f, max_buffer)
                 if read_size > 0:
                     yield make_array(max_buffer, read_size)
+                    if n:
+                        n -= read_size
                 else:
                     return
-            if n > 0:
+            if n:
                 tmp_buffer_size = n * bytes_per_sample
                 tmp_buffer = bytearray(tmp_buffer_size)
                 read_size = readinto(f, tmp_buffer)
                 assert read_size == tmp_buffer_size
                 yield make_array(tmp_buffer, read_size)
 
-        # for ti, t in enumerate(tracks):
-        #     track_offset = t.offset_samples
-
-
-        # while True:
-        #     read_size = readinto(f, max_buffer)
-        #     if not read_size:
-        #         break
-        #
-        #     a = frombuffer(max_buffer, dtype=sample_type, count=read_size // 4)
-        #     a = reshape(a, (channel_count, -1), order='F')
-        #     yield a
+        track_count = len(tracks)
+        for ti in range(track_count):
+            if track_count == ti + 1:
+                read_count = None
+            else:
+                read_count = tracks[ti + 1].offset_samples - tracks[ti].offset_samples
+            yield read_samples(read_count)
