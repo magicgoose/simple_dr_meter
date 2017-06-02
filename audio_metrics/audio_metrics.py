@@ -10,6 +10,7 @@ class DynamicRangeMetrics(NamedTuple):
     dr: int
     peak: float
     rms: float
+    sample_count: int
 
 
 def _calc_block_metrics(samples: Iterator[np.ndarray], sample_count):
@@ -73,4 +74,4 @@ def compute_dr(a: AudioSourceInfo, samples: Iterator[np.ndarray]) -> DynamicRang
     rms_all = np.mean(rms_all)
     rms_db = float(decibel(rms_all))
 
-    return DynamicRangeMetrics(dr, peak_db, rms_db)
+    return DynamicRangeMetrics(dr, peak_db, rms_db, sample_count)
