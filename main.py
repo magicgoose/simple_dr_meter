@@ -41,11 +41,12 @@ def format_time(seconds):
     return f'{m}:{s:02d}'
 
 
-def write_log(out_path, dr_log_items):
+def write_log(out_path, dr_log_items, average_dr):
     out_path = os.path.join(out_path, 'dr.txt')
     print(f'writing log to {out_path}')
     with open(out_path, mode='x', encoding='utf8') as f:
         l1 = '-' * 80
+        l2 = '=' * 80
         w = f.write
         w(f"log date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
         for group_info, tracks in dr_log_items:
@@ -53,9 +54,10 @@ def write_log(out_path, dr_log_items):
             w(f"{l1}\nAnalyzed: {group_name}\n{l1}\n\nDR         Peak         RMS     Duration Track\n{l1}\n")
             for dr, peak, rms, duration_sec, track_name in tracks:
                 w(f"DR{str(dr).ljust(4)}{peak:9.2f} dB{rms:9.2f} dB{format_time(duration_sec).rjust(10)} {track_name}\n")
+            w(f"{l1}\n\nNumber of tracks:  {len(tracks)}\nOfficial DR value: DR{average_dr}\n\n"
+              f"Samplerate:        {group_info.sample_rate} Hz\nChannels:          {group_info.channel_count}\n{l2}")
 
     print('…done')
-    pass
 
 
 def main():
@@ -85,7 +87,7 @@ def main():
     dr_mean = round(dr_mean)  # it's now official
 
     dr_log_items = press_log_items(dr_log_items)
-    write_log(get_log_path(in_path), dr_log_items)
+    write_log(get_log_path(in_path), dr_log_items, dr_mean)
 
     pass
 
