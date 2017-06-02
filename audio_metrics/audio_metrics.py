@@ -3,7 +3,6 @@ from typing import NamedTuple, Iterator
 import numpy as np
 from math import floor
 
-from audio_io import AudioSource
 from audio_io.audio_io import AudioSourceInfo
 
 
@@ -63,7 +62,7 @@ def compute_dr(a: AudioSourceInfo, samples: Iterator[np.ndarray]) -> DynamicRang
     rms = np.partition(rms, rms_start, axis=0)[rms_range, :]
     rms **= 2
     rms_sqr_sum = np.sum(rms, axis=0)
-    dr_per_channel = -20.0 * np.log10(np.sqrt(rms_sqr_sum / rms_count) / total_second_peak)
+    dr_per_channel = -decibel(np.sqrt(rms_sqr_sum / rms_count) / total_second_peak)
 
     dr = int(round(np.mean(dr_per_channel, axis=0)))
 
