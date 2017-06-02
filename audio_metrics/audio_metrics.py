@@ -14,10 +14,10 @@ class DynamicRangeMetrics(NamedTuple):
 
 
 def _calc_block_metrics(samples: Iterator[np.ndarray]):
-    total_length = 0
+    # total_length = 0
     for a in samples:
         length = a.shape[1]
-        total_length += length
+        # total_length += length
 
         a = np.ascontiguousarray(a)
         peaks = np.max(np.abs(a), axis=1)
@@ -28,7 +28,7 @@ def _calc_block_metrics(samples: Iterator[np.ndarray]):
         rms = np.sqrt(2.0 * sum_sqr / length)
         yield from peaks
         yield from rms
-    print(total_length)
+    # print(total_length)
 
 
 def compute_dr(a: AudioSourceInfo, samples: Iterator[np.ndarray]) -> DynamicRangeMetrics:

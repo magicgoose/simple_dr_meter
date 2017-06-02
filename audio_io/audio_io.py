@@ -267,7 +267,7 @@ def _read_audio_blocks(in_path, channel_count, samples_per_block, tracks: List[T
             a = reshape(a, (channel_count, -1), order='F')
             return a
 
-        def read_samples(n):
+        def read_n_bytes(n):
             while (n is None) or (n >= max_bytes_per_block):
                 read_size = readinto(f, max_buffer)
                 if read_size > 0:
@@ -277,16 +277,16 @@ def _read_audio_blocks(in_path, channel_count, samples_per_block, tracks: List[T
                 else:
                     return
             if n:
-                tmp_buffer_size = n * bytes_per_sample
-                tmp_buffer = bytearray(tmp_buffer_size)
+                tmp_buffer = bytearray(n)
                 read_size = readinto(f, tmp_buffer)
-                assert read_size == tmp_buffer_size
+                assert read_size == n
                 yield make_array(tmp_buffer, read_size)
 
         track_count = len(tracks)
         for ti in range(track_count):
             if track_count == ti + 1:
-                read_count = None
+                bytes_to_read = None
             else:
-                read_count = (tracks[ti + 1].offset_samples - tracks[ti].offset_samples) * bytes_per_sample
-            yield read_samples(read_count)
+                samples_to_read = tracks[ti + 1].offset_samples - tracks[ti].offset_samples
+                bytes_to_read = samples_to_read * bytes_per_sample
+            yield read_n_bytes(bytes_to_read)
