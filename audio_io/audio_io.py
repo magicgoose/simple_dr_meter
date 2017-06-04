@@ -21,9 +21,32 @@ ex_ffmpeg = 'ffmpeg'
 
 from enum import Enum, auto
 
+known_audio_extensions = {
+    'aac',
+    'ac3',
+    'aif',
+    'aiff',
+    'ape',
+    'dts',
+    'flac',
+    'm4a',
+    'mka',
+    'mp2',
+    'mp3',
+    'mpc',
+    'ofr',
+    'ogg',
+    'opus',
+    'tak',
+    'tta',
+    'wav',
+    'wv',
+}
+
 
 class FileKind(Enum):
     CUE = auto()
+    FOLDER = auto()
     AUDIO = auto()
 
 
@@ -37,6 +60,8 @@ class CueCmd(Enum):
 
 
 def get_file_kind(in_path: str) -> FileKind:
+    if os.path.isdir(in_path):
+        return FileKind.FOLDER
     _, ext = path.splitext(in_path)
     if '.cue' == ext.lower():
         return FileKind.CUE
@@ -171,19 +196,37 @@ def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
             raise NotImplementedError
 
 
+def _audio_source_from_file(in_path):
+    channel_count, sample_rate = _get_audio_properties(in_path)
+    track_info = TrackInfo(name='', offset_samples=0)
+    return AudioSourceInfo(in_path, '', (), channel_count, sample_rate, [track_info])
+
+
+def _audio_sources_from_folder(in_path) -> Iterable[AudioSourceInfo]:
+    yoba = os.walk(in_path, topdown=True)
+    for dirpath, dirnames, filenames in yoba:
+        for f in filenames:
+            _, ext = path.splitext(f)
+            ext = ext[1:].lower()
+            if ext in known_audio_extensions:
+                yield _audio_source_from_file(path.join(in_path, f))
+            pass
+        break
+
+
 def read_audio_info(in_path: str) -> Iterable[AudioSourceInfo]:
     """
     if input file is a cue, it can reference multiple audio files with different sample rates.
     therefore the result is a sequence.
     """
     kind = get_file_kind(in_path)
-    if kind == FileKind.CUE:
+    if kind == FileKind.FOLDER:
+        yield from _audio_sources_from_folder(in_path)
+    elif kind == FileKind.CUE:
         directory_path = os.path.dirname(in_path)
-        return _translate_from_cue(directory_path, parse_cue(in_path))
+        yield from _translate_from_cue(directory_path, parse_cue(in_path))
     elif kind == FileKind.AUDIO:
-        channel_count, sample_rate = _get_audio_properties(in_path)
-        track_info = TrackInfo(name='', offset_samples=0)
-        return [AudioSourceInfo(in_path, channel_count, sample_rate, [track_info])]
+        yield _audio_source_from_file(in_path)
     else:
         raise NotImplementedError
 
@@ -237,7 +280,8 @@ def _get_params(in_path):
     return _parse_audio_params(out)
 
 
-def _read_audio_blocks(in_path, channel_count, samples_per_block, tracks: List[TrackInfo]) -> Iterator[Iterator[np.ndarray]]:
+def _read_audio_blocks(in_path, channel_count, samples_per_block, tracks: List[TrackInfo]) -> Iterator[
+    Iterator[np.ndarray]]:
     bytes_per_sample = 4 * channel_count
     max_bytes_per_block = bytes_per_sample * samples_per_block
 

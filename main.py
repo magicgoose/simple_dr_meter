@@ -55,7 +55,7 @@ def write_log(out_path, dr_log_items, average_dr):
             for dr, peak, rms, duration_sec, track_name in tracks:
                 w(f"DR{str(dr).ljust(4)}{peak:9.2f} dB{rms:9.2f} dB{format_time(duration_sec).rjust(10)} {track_name}\n")
             w(f"{l1}\n\nNumber of tracks:  {len(tracks)}\nOfficial DR value: DR{average_dr}\n\n"
-              f"Samplerate:        {group_info.sample_rate} Hz\nChannels:          {group_info.channel_count}\n{l2}")
+              f"Samplerate:        {group_info.sample_rate} Hz\nChannels:          {group_info.channel_count}\n{l2}\n\n")
 
     print('…done')
 
