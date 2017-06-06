@@ -155,7 +155,7 @@ def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
 
     for cmd, *args in cue_items:
         if cmd == CueCmd.TRACK or cmd == CueCmd.FILE or cmd == CueCmd.EOF:
-            if index_number:
+            if index_number is not None:
                 assert last_title_track is not None
                 assert index_offset is not None
                 # noinspection PyTypeChecker
@@ -188,7 +188,7 @@ def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
         elif cmd == CueCmd.INDEX:
             track_start = False
             number, offset = args
-            if not index_number or index_number > number:
+            if (index_number is None) or (index_number > number):
                 index_number, index_offset = number, int(sample_rate * offset)
         elif cmd == CueCmd.PERFORMER:
             continue  # TODO make use of performers
@@ -304,7 +304,7 @@ def _read_audio_blocks(in_path, channel_count, samples_per_block, tracks: List[T
 
         skip_samples = tracks[0].offset_samples
         if skip_samples > 0:
-            f.seek(bytes_per_sample * skip_samples, SEEK_CUR)
+            f.read(bytes_per_sample * skip_samples)
 
         def make_array(buffer, size):
             a = frombuffer(buffer, dtype=sample_type, count=size // 4)
