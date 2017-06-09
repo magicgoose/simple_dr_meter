@@ -78,6 +78,7 @@ class AudioFileParams(NamedTuple):
     sample_rate: int
     title: str
     artist: str
+    album: str
 
 
 class AudioSourceInfo(NamedTuple):
@@ -270,7 +271,8 @@ def _parse_audio_params(s) -> AudioFileParams:
         int(d["channels"]),
         int(d["sample_rate"]),
         d["TAG:TITLE"],
-        d["TAG:ARTIST"])
+        d["TAG:ARTIST"],
+        d["TAG:ALBUM"])
 
 
 def _get_params(in_path) -> AudioFileParams:
@@ -279,7 +281,7 @@ def _get_params(in_path) -> AudioFileParams:
          '-v', 'error',
          '-select_streams', '0:a:0',
          '-show_entries', 'stream=channels,sample_rate',
-         '-show_entries', 'format_tags=title,artist',
+         '-show_entries', 'format_tags=title,artist,album',
          in_path),
         stdout=PIPE)
     out, err = p.communicate()
