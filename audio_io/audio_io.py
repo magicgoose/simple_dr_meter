@@ -1,6 +1,6 @@
 import re
 import subprocess as sp
-from collections import OrderedDict
+from collections import defaultdict
 from fractions import Fraction
 from io import SEEK_CUR
 from numbers import Number
@@ -71,6 +71,13 @@ def get_file_kind(in_path: str) -> FileKind:
 class TrackInfo(NamedTuple):
     name: str
     offset_samples: int
+
+
+class AudioFileParams(NamedTuple):
+    channel_count: int
+    sample_rate: int
+    title: str
+    artist: str
 
 
 class AudioSourceInfo(NamedTuple):
@@ -179,7 +186,8 @@ def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
                 return
 
             last_file_path = join(directory_path, args[0])
-            channel_count, sample_rate = _get_audio_properties(last_file_path)
+            p = _get_audio_properties(last_file_path)
+            channel_count, sample_rate = p.channel_count, p.sample_rate
         elif cmd == CueCmd.TITLE:
             if track_start:
                 last_title_track = args[0]
@@ -196,10 +204,10 @@ def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
             raise NotImplementedError
 
 
-def _audio_source_from_file(in_path):
-    channel_count, sample_rate = _get_audio_properties(in_path)
-    track_info = TrackInfo(name='', offset_samples=0)
-    return AudioSourceInfo(in_path, '', (), channel_count, sample_rate, [track_info])
+def _audio_source_from_file(in_path) -> AudioSourceInfo:
+    p = _get_audio_properties(in_path)
+    track_info = TrackInfo(name=p.title, offset_samples=0)
+    return AudioSourceInfo(in_path, p.title, (p.artist,), p.channel_count, p.sample_rate, [track_info])
 
 
 def _audio_sources_from_folder(in_path) -> Iterable[AudioSourceInfo]:
@@ -231,12 +239,12 @@ def read_audio_info(in_path: str) -> Iterable[AudioSourceInfo]:
         raise NotImplementedError
 
 
-def _get_audio_properties(in_path):
-    channel_count, sample_rate = _get_params(in_path)
-    if channel_count < 1 or sample_rate < 8000:
-        sys.exit('invalid format: channels={}, sample_rate={}'.format(channel_count, sample_rate))
+def _get_audio_properties(in_path) -> AudioFileParams:
+    r = _get_params(in_path)
+    if r.channel_count < 1 or r.sample_rate < 8000:
+        sys.exit(f'invalid format: channels={r.channel_count}, sample_rate={r.sample_rate}')
 
-    return channel_count, sample_rate
+    return r
 
 
 def read_audio_data(what: AudioSourceInfo, samples_per_block: int) -> AudioSource:
@@ -252,24 +260,26 @@ def _test_ffmpeg():
         sys.exit('ffmpeg not installed, broken or not on PATH')
 
 
-def _parse_audio_params(s):
-    d = {}
-    for m in re.finditer(r'([a-z_]+)=([0-9]+)', s):
+def _parse_audio_params(s) -> AudioFileParams:
+    d = defaultdict(lambda: "(unknown)")
+    for m in re.finditer(r'([a-zA-Z_:]+)=(.+)', s):
         v = m.groups()
-        d.update({v[0]: int(v[1])})
+        d[v[0]] = v[1]
 
-    def values(channels, sample_rate):
-        return channels, sample_rate
+    return AudioFileParams(
+        int(d["channels"]),
+        int(d["sample_rate"]),
+        d["TAG:TITLE"],
+        d["TAG:ARTIST"])
 
-    return values(**d)
 
-
-def _get_params(in_path):
+def _get_params(in_path) -> AudioFileParams:
     p = sp.Popen(
         (ex_ffprobe,
          '-v', 'error',
          '-select_streams', '0:a:0',
          '-show_entries', 'stream=channels,sample_rate',
+         '-show_entries', 'format_tags=title,artist',
          in_path),
         stdout=PIPE)
     out, err = p.communicate()
