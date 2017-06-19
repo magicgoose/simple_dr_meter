@@ -1,8 +1,10 @@
+#!/usr/bin/env python3
 from datetime import datetime
 import os
 import sys
 
 # import time
+from typing import Iterable, Tuple
 
 from audio_io import read_audio_info, read_audio_data
 from audio_io.audio_io import AudioSourceInfo
@@ -60,11 +62,26 @@ def write_log(out_path, dr_log_items, average_dr):
     print('…done')
 
 
+def make_log(l: Iterable[Tuple[AudioSourceInfo, Iterable[Tuple[int, float, float, int, str]]]]):
+    import itertools
+    grouped = itertools.groupby(l, key=lambda x: (x[0].channel_count, x[0].sample_rate))
+    yoba = tuple(map(lambda x: (x[0], tuple(x[1])), grouped))
+
+    pass
+
+
 def main():
+    analyze_and_write_log()
+
+    # import base64, pickle
+    # l = pickle.loads(base64.b64decode(…))
+    # dr_log_items = make_log(l)
+    # pass
+
+
+def analyze_and_write_log():
     in_path = len(sys.argv) > 1 and sys.argv[1] or input()
-
     audio_info = read_audio_info(in_path)
-
     i = 0
     dr_mean = 0
     dr_log_items = []
@@ -85,11 +102,8 @@ def main():
             i += 1
     dr_mean /= i
     dr_mean = round(dr_mean)  # it's now official
-
     dr_log_items = press_log_items(dr_log_items)
     write_log(get_log_path(in_path), dr_log_items, dr_mean)
-
-    pass
 
 
 if __name__ == '__main__':

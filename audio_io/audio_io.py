@@ -85,6 +85,7 @@ class AudioSourceInfo(NamedTuple):
     path: str
     name: str
     performers: Sequence[str]
+    album: str
     channel_count: int
     sample_rate: int
     tracks: List[TrackInfo]
@@ -176,12 +177,12 @@ def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
         if cmd == CueCmd.FILE or cmd == CueCmd.EOF:
             if last_file_path:
                 yield AudioSourceInfo(
-                    last_file_path,
-                    last_title_file,
-                    (),
-                    channel_count,
-                    sample_rate,
-                    tracks)
+                    path=last_file_path,
+                    name=last_title_file,
+                    performers=(),
+                    channel_count=channel_count,
+                    sample_rate=sample_rate,
+                    tracks=tracks)
                 tracks = []
             if cmd == CueCmd.EOF:
                 return
@@ -208,7 +209,14 @@ def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
 def _audio_source_from_file(in_path) -> AudioSourceInfo:
     p = _get_audio_properties(in_path)
     track_info = TrackInfo(name=p.title, offset_samples=0)
-    return AudioSourceInfo(in_path, p.title, (p.artist,), p.channel_count, p.sample_rate, [track_info])
+    return AudioSourceInfo(
+        path=in_path,
+        name=p.title,
+        performers=(p.artist,),
+        album=p.album,
+        channel_count=p.channel_count,
+        sample_rate=p.sample_rate,
+        tracks=[track_info])
 
 
 def _audio_sources_from_folder(in_path) -> Iterable[AudioSourceInfo]:
