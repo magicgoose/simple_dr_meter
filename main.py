@@ -30,8 +30,12 @@ def get_log_path(in_path):
 
 
 def get_group_name(group_info: AudioSourceInfo):
-    # TODO make something better
-    return group_info.name or os.path.basename(group_info.path)
+    if group_info.name:
+        if len(group_info.performers):
+            performers = ", ".join(group_info.performers)
+            return f"{performers} — {group_info.name}"
+        return group_info.name
+    return os.path.basename(group_info.path)
 
 
 def format_time(seconds):

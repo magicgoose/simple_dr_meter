@@ -157,6 +157,7 @@ def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
     track_start = False  # if parser is between TRACK and INDEX commands
     last_title_file = None
     last_title_track = None
+    file_performers = []
 
     tracks = []
 
@@ -179,7 +180,7 @@ def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
                 yield AudioSourceInfo(
                     path=last_file_path,
                     name=last_title_file,
-                    performers=(),
+                    performers=file_performers,
                     channel_count=channel_count,
                     sample_rate=sample_rate,
                     tracks=tracks)
@@ -187,6 +188,7 @@ def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
             if cmd == CueCmd.EOF:
                 return
 
+            file_performers = []
             last_file_path = join(directory_path, args[0])
             p = _get_audio_properties(last_file_path)
             channel_count, sample_rate = p.channel_count, p.sample_rate
@@ -195,13 +197,14 @@ def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
                 last_title_track = args[0]
             else:
                 last_title_file = args[0]
+        elif cmd == CueCmd.PERFORMER:
+            if not track_start:
+                file_performers.append(args[0])
         elif cmd == CueCmd.INDEX:
             track_start = False
             number, offset = args
             if (index_number is None) or (index_number > number):
                 index_number, index_offset = number, int(sample_rate * offset)
-        elif cmd == CueCmd.PERFORMER:
-            continue  # TODO make use of performers
         else:
             raise NotImplementedError
 
