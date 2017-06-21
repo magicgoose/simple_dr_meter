@@ -303,8 +303,8 @@ def _get_params(in_path) -> AudioFileParams:
     return _parse_audio_params(out)
 
 
-def _read_audio_blocks(in_path, channel_count, samples_per_block, tracks: List[TrackInfo]) -> Iterator[
-    Iterator[np.ndarray]]:
+def _read_audio_blocks(in_path, channel_count, samples_per_block, tracks: List[TrackInfo]) -> \
+        Iterator[Iterator[np.ndarray]]:
     bytes_per_sample = 4 * channel_count
     max_bytes_per_block = bytes_per_sample * samples_per_block
 
@@ -321,10 +321,7 @@ def _read_audio_blocks(in_path, channel_count, samples_per_block, tracks: List[T
     sample_type = np.dtype('<f4')
     frombuffer = np.frombuffer
     reshape = np.reshape
-    max_buffer = bytearray(max_bytes_per_block)
     with p.stdout as f:
-        readinto = type(f).readinto
-
         skip_samples = tracks[0].offset_samples
         if skip_samples > 0:
             f.read(bytes_per_sample * skip_samples)
@@ -336,18 +333,19 @@ def _read_audio_blocks(in_path, channel_count, samples_per_block, tracks: List[T
 
         def read_n_bytes(n):
             while (n is None) or (n >= max_bytes_per_block):
-                read_size = readinto(f, max_buffer)
+                b = f.read(max_bytes_per_block)
+                read_size = len(b)
                 if read_size > 0:
-                    yield make_array(max_buffer, read_size)
+                    yield make_array(b, read_size)
                     if n:
                         n -= read_size
                 else:
                     return
             if n:
-                tmp_buffer = bytearray(n)
-                read_size = readinto(f, tmp_buffer)
+                b = f.read(n)
+                read_size = len(b)
                 assert read_size == n
-                yield make_array(tmp_buffer, read_size)
+                yield make_array(b, read_size)
 
         track_count = len(tracks)
         for ti in range(track_count):

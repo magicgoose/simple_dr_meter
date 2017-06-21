@@ -3,7 +3,7 @@ from datetime import datetime
 import os
 import sys
 
-# import time
+import time
 from typing import Iterable, Tuple, NamedTuple
 
 from audio_io import read_audio_info, read_audio_data
@@ -99,7 +99,11 @@ def main():
     def track_cb(i, track_info, dr):
         print(f"{(i+1):02d} - {track_info.name}: DR{dr}")
 
+    t = time.time
+    t1 = t()
     dr_log_items, dr_mean = analyze_dr(in_path, track_cb)
+    t2 = t()
+    print(f'Analyzed all tracks in {t2-t1:.2f} seconds')
     write_log(get_log_path(in_path), dr_log_items, dr_mean)
 
 
