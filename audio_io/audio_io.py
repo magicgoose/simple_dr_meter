@@ -157,7 +157,7 @@ def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
     track_start = False  # if parser is between TRACK and INDEX commands
     last_title_file = None
     last_title_track = None
-    file_performers = []
+    file_performer = None
 
     tracks = []
 
@@ -181,7 +181,7 @@ def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
                     path=last_file_path,
                     name=last_title_file,
                     album=last_title_file,
-                    performers=file_performers,
+                    performers=[file_performer] if file_performer else [],
                     channel_count=channel_count,
                     sample_rate=sample_rate,
                     tracks=tracks)
@@ -189,7 +189,6 @@ def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
             if cmd == CueCmd.EOF:
                 return
 
-            file_performers = []
             last_file_path = join(directory_path, args[0])
             p = _get_audio_properties(last_file_path)
             channel_count, sample_rate = p.channel_count, p.sample_rate
@@ -200,7 +199,7 @@ def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
                 last_title_file = args[0]
         elif cmd == CueCmd.PERFORMER:
             if not track_start:
-                file_performers.append(args[0])
+                file_performer = args[0]
         elif cmd == CueCmd.INDEX:
             track_start = False
             number, offset = args
