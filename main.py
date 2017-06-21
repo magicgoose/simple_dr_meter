@@ -4,7 +4,7 @@ import os
 import sys
 
 # import time
-from typing import Iterable, Tuple
+from typing import Iterable, Tuple, NamedTuple
 
 from audio_io import read_audio_info, read_audio_data
 from audio_io.audio_io import AudioSourceInfo
@@ -18,24 +18,22 @@ def get_samples_per_block(audio_info: AudioSourceInfo):
     return block_time * (sample_rate + sample_rate_extend)
 
 
-def press_log_items(dr_log_items):
-    # TODO: press
-    return dr_log_items
-
-
 def get_log_path(in_path):
     if os.path.isdir(in_path):
         return in_path
     return os.path.dirname(in_path)
 
 
-def get_group_name(group_info: AudioSourceInfo):
-    if group_info.name:
-        if len(group_info.performers):
-            performers = ", ".join(group_info.performers)
-            return f"{performers} — {group_info.name}"
-        return group_info.name
-    return os.path.basename(group_info.path)
+class LogGroup(NamedTuple):
+    performers: Iterable[str]
+    albums: Iterable[str]
+    channels: int
+    sample_rate: int
+    tracks_dr: Iterable[Tuple[int, float, float, int, str]]
+
+
+def get_group_title(group: LogGroup):
+    return f'{", ".join(group.performers)} — {", ".join(group.albums)}'
 
 
 def format_time(seconds):
@@ -47,7 +45,7 @@ def format_time(seconds):
     return f'{m}:{s:02d}'
 
 
-def write_log(out_path, dr_log_items, average_dr):
+def write_log(out_path, dr_log_groups: Iterable[LogGroup], average_dr):
     out_path = os.path.join(out_path, 'dr.txt')
     print(f'writing log to {out_path}')
     with open(out_path, mode='x', encoding='utf8') as f:
@@ -55,32 +53,44 @@ def write_log(out_path, dr_log_items, average_dr):
         l2 = '=' * 80
         w = f.write
         w(f"log date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-        for group_info, tracks in dr_log_items:
-            group_name = get_group_name(group_info)
+        for group in dr_log_groups:
+            group_name = get_group_title(group)
+
             w(f"{l1}\nAnalyzed: {group_name}\n{l1}\n\nDR         Peak         RMS     Duration Track\n{l1}\n")
-            for dr, peak, rms, duration_sec, track_name in tracks:
+            track_count = 0
+            for dr, peak, rms, duration_sec, track_name in group.tracks_dr:
                 w(f"DR{str(dr).ljust(4)}{peak:9.2f} dB{rms:9.2f} dB{format_time(duration_sec).rjust(10)} {track_name}\n")
-            w(f"{l1}\n\nNumber of tracks:  {len(tracks)}\nOfficial DR value: DR{average_dr}\n\n"
-              f"Samplerate:        {group_info.sample_rate} Hz\nChannels:          {group_info.channel_count}\n{l2}\n\n")
+                track_count += 1
+            w(f"{l1}\n\nNumber of tracks:  {track_count}\nOfficial DR value: DR{average_dr}\n\n"
+              f"Samplerate:        {group.sample_rate} Hz\nChannels:          {group.channels}\n{l2}\n\n")
 
     print('…done')
 
 
-def make_log(l: Iterable[Tuple[AudioSourceInfo, Iterable[Tuple[int, float, float, int, str]]]]):
+def flatmap(f, items):
+    for i in items:
+        yield from f(i)
+
+
+def make_log_groups(l: Iterable[Tuple[AudioSourceInfo, Iterable[Tuple[int, float, float, int, str]]]]):
     import itertools
     grouped = itertools.groupby(l, key=lambda x: (x[0].channel_count, x[0].sample_rate))
-    yoba = tuple(map(lambda x: (x[0], tuple(x[1])), grouped))
 
-    pass
+    for ((channels, sample_rate), subitems) in grouped:
+        subitems = tuple(subitems)
+        performers = set(flatmap(lambda x: x[0].performers, subitems))
+        albums = set(map(lambda x: x[0].album, subitems))
+        tracks_dr = flatmap(lambda x: x[1], subitems)
+        yield LogGroup(
+            performers=performers,
+            albums=albums,
+            channels=channels,
+            sample_rate=sample_rate,
+            tracks_dr=tracks_dr)
 
 
 def main():
     analyze_and_write_log()
-
-    # import base64, pickle
-    # l = pickle.loads(base64.b64decode(…))
-    # dr_log_items = make_log(l)
-    # pass
 
 
 def analyze_and_write_log():
@@ -106,7 +116,8 @@ def analyze_and_write_log():
             i += 1
     dr_mean /= i
     dr_mean = round(dr_mean)  # it's now official
-    dr_log_items = press_log_items(dr_log_items)
+
+    dr_log_items = make_log_groups(dr_log_items)
     write_log(get_log_path(in_path), dr_log_items, dr_mean)
 
 
