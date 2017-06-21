@@ -5,6 +5,7 @@ from fractions import Fraction
 from io import SEEK_CUR
 from numbers import Number
 
+
 import chardet
 
 import sys
@@ -15,6 +16,8 @@ import numpy as np
 from os import path
 
 import os
+
+from util.natural_sort import natural_sort_key
 
 ex_ffprobe = 'ffprobe'
 ex_ffmpeg = 'ffmpeg'
@@ -223,8 +226,8 @@ def _audio_source_from_file(in_path) -> AudioSourceInfo:
 
 
 def _audio_sources_from_folder(in_path) -> Iterable[AudioSourceInfo]:
-    yoba = os.walk(in_path, topdown=True)
-    for dirpath, dirnames, filenames in yoba:
+    for dirpath, dirnames, filenames in os.walk(in_path, topdown=True):
+        filenames = sorted(filenames, key=natural_sort_key)
         for f in filenames:
             _, ext = path.splitext(f)
             ext = ext[1:].lower()
