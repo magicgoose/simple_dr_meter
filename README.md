@@ -1,13 +1,13 @@
 # simple_dr_meter
 This is a fully compliant Dynamic Range meter. It computes DR at defined by dr.loudness-war.info and generated logs with all the proper formatting.
 
-##Prerequisites:
+## Prerequisites:
 
 * `ffmpeg` and `ffprobe` are on your PATH
 * CPython 3.6+
 * Python packages from PyPI: `numpy`
 
-##How to use:
+## How to use:
 
 	$ main.py <input>
 
@@ -18,7 +18,7 @@ where <input> is one of:
 
 It will generate dr.txt with the proper DR log, and show something in the stdout while working. That's it.
 
-##Some extra words:
+## Some extra words:
 
 The work was initially based on https://github.com/simon-r/dr14_t.meter and it would be quite a tough start should I not take a look at it, but almost everything was rewritten since then.
 
@@ -33,7 +33,7 @@ on the other hand, it doesn't have any extra fancy features like graphs, etc. ma
 
 So, basically it's a simple and practically complete implementation of DR measurement, made to make it easier to spread the knowledge and take a stand against the Loudness War™.
 
-##TODO:
+## TODO:
 
 * Release it on PyPI! I have no experience with that but I should probably learn how to do this.
 * More optimizations, especially for the case when tracks are in separate files.
