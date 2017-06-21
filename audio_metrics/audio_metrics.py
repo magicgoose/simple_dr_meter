@@ -13,8 +13,8 @@ class DynamicRangeMetrics(NamedTuple):
     sample_count: int
 
 
-def _calc_block_metrics(samples: Iterator[np.ndarray], sample_count):
-    for a in samples:
+def _calc_block_metrics(pool, samples: Iterator[np.ndarray], sample_count):
+    def process_part(a: np.ndarray):
         length = a.shape[1]
         sample_count[0] += length
 
@@ -23,8 +23,12 @@ def _calc_block_metrics(samples: Iterator[np.ndarray], sample_count):
 
         a **= 2  # original values are not needed after this point
         sum_sqr = np.sum(a, axis=1)
-
         rms = np.sqrt(2.0 * sum_sqr / length)
+        return peaks, rms, sum_sqr
+
+    results = pool.imap_unordered(process_part, samples, chunksize=4)
+
+    for peaks, rms, sum_sqr in results:
         yield from peaks
         yield from rms
         yield from sum_sqr
@@ -34,12 +38,12 @@ def decibel(a):
     return np.log10(a) * 20
 
 
-def compute_dr(a: AudioSourceInfo, samples: Iterator[np.ndarray]) -> DynamicRangeMetrics:
+def compute_dr(pool, a: AudioSourceInfo, samples: Iterator[np.ndarray]) -> DynamicRangeMetrics:
     channel_count = a.channel_count
 
     sample_count = [0]
 
-    metrics = np.fromiter(_calc_block_metrics(samples, sample_count), dtype='<f4').reshape((
+    metrics = np.fromiter(_calc_block_metrics(pool, samples, sample_count), dtype='<f4').reshape((
         -1,  # number of block
         3,  # peak, rms, sum_sqr
         channel_count

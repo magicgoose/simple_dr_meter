@@ -109,6 +109,14 @@ def main():
 
 def analyze_dr(in_path: str, track_cb):
     audio_info = read_audio_info(in_path)
+
+    import multiprocessing.dummy as mt
+    import multiprocessing
+
+    cpu_count = multiprocessing.cpu_count()
+    thread_count = max(1, cpu_count - 1)
+    pool = mt.Pool(thread_count)
+
     i = 0
     dr_mean = 0
     dr_log_items = []
@@ -119,7 +127,7 @@ def analyze_dr(in_path: str, track_cb):
         samples_per_block = get_samples_per_block(audio_info_part)
         audio_data = read_audio_data(audio_info_part, samples_per_block)
         for track_samples, track_info in zip(audio_data.blocks_generator, audio_info_part.tracks):
-            dr_metrics = compute_dr(audio_info_part, track_samples)
+            dr_metrics = compute_dr(pool, audio_info_part, track_samples)
             dr = dr_metrics.dr
             if track_cb:
                 track_cb(i, track_info, dr)
