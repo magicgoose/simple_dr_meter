@@ -180,6 +180,7 @@ def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
                 yield AudioSourceInfo(
                     path=last_file_path,
                     name=last_title_file,
+                    album=last_title_file,
                     performers=file_performers,
                     channel_count=channel_count,
                     sample_rate=sample_rate,
