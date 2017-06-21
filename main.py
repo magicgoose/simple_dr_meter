@@ -59,7 +59,11 @@ def write_log(out_path, dr_log_groups: Iterable[LogGroup], average_dr):
             w(f"{l1}\nAnalyzed: {group_name}\n{l1}\n\nDR         Peak         RMS     Duration Track\n{l1}\n")
             track_count = 0
             for dr, peak, rms, duration_sec, track_name in group.tracks_dr:
-                w(f"DR{str(dr).ljust(4)}{peak:9.2f} dB{rms:9.2f} dB{format_time(duration_sec).rjust(10)} {track_name}\n")
+                w(f"DR{str(dr).ljust(4)}"
+                  f"{peak:9.2f} dB"
+                  f"{rms:9.2f} dB"
+                  f"{format_time(duration_sec).rjust(10)} "
+                  f"{track_name}\n")
                 track_count += 1
             w(f"{l1}\n\nNumber of tracks:  {track_count}\nOfficial DR value: DR{average_dr}\n\n"
               f"Samplerate:        {group.sample_rate} Hz\nChannels:          {group.channels}\n{l2}\n\n")
@@ -90,11 +94,16 @@ def make_log_groups(l: Iterable[Tuple[AudioSourceInfo, Iterable[Tuple[int, float
 
 
 def main():
-    analyze_and_write_log()
-
-
-def analyze_and_write_log():
     in_path = len(sys.argv) > 1 and sys.argv[1] or input()
+
+    def track_cb(i, track_info, dr):
+        print(f"{(i+1):02d} - {track_info.name}: DR{dr}")
+
+    dr_log_items, dr_mean = analyze_dr(in_path, track_cb)
+    write_log(get_log_path(in_path), dr_log_items, dr_mean)
+
+
+def analyze_dr(in_path: str, track_cb):
     audio_info = read_audio_info(in_path)
     i = 0
     dr_mean = 0
@@ -108,7 +117,8 @@ def analyze_and_write_log():
         for track_samples, track_info in zip(audio_data.blocks_generator, audio_info_part.tracks):
             dr_metrics = compute_dr(audio_info_part, track_samples)
             dr = dr_metrics.dr
-            print(f"{(i+1):02d} - {track_info.name}: DR{dr}")
+            if track_cb:
+                track_cb(i, track_info, dr)
             dr_mean += dr
             duration_seconds = round(dr_metrics.sample_count / audio_info_part.sample_rate)
             dr_log_subitems.append(
@@ -118,7 +128,7 @@ def analyze_and_write_log():
     dr_mean = round(dr_mean)  # it's now official
 
     dr_log_items = make_log_groups(dr_log_items)
-    write_log(get_log_path(in_path), dr_log_items, dr_mean)
+    return dr_log_items, dr_mean
 
 
 if __name__ == '__main__':
