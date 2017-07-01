@@ -2,9 +2,7 @@ import re
 import subprocess as sp
 from collections import defaultdict
 from fractions import Fraction
-from io import SEEK_CUR
 from numbers import Number
-
 
 import chardet
 
@@ -17,6 +15,7 @@ from os import path
 
 import os
 
+from util.constants import MEASURE_SAMPLE_RATE
 from util.natural_sort import natural_sort_key
 
 ex_ffprobe = 'ffprobe'
@@ -207,7 +206,7 @@ def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
             track_start = False
             number, offset = args
             if (index_number is None) or (index_number > number):
-                index_number, index_offset = number, int(sample_rate * offset)
+                index_number, index_offset = number, int(MEASURE_SAMPLE_RATE * offset)
         else:
             raise NotImplementedError
 
@@ -316,6 +315,9 @@ def _read_audio_blocks(in_path, channel_count, samples_per_block, tracks: List[T
          '-i', in_path,
          '-map', '0:a:0',
          '-c:a', 'pcm_f32le',
+         '-ar', str(MEASURE_SAMPLE_RATE),
+         # ^ because apparently official meter resamples to 44k before measuring;
+         # using default low quality resampling because it doesn't affect measurements and is faster
          '-f', 'f32le',
          '-'),
         stderr=None,

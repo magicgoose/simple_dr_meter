@@ -5,7 +5,6 @@ from math import floor
 
 from audio_io.audio_io import AudioSourceInfo
 
-
 class DynamicRangeMetrics(NamedTuple):
     dr: int
     peak: float

@@ -9,13 +9,7 @@ from typing import Iterable, Tuple, NamedTuple
 from audio_io import read_audio_info, read_audio_data
 from audio_io.audio_io import AudioSourceInfo
 from audio_metrics import compute_dr
-
-
-def get_samples_per_block(audio_info: AudioSourceInfo):
-    sample_rate = audio_info.sample_rate
-    sample_rate_extend = 60 if sample_rate == 44100 else sample_rate
-    block_time = 3
-    return block_time * (sample_rate + sample_rate_extend)
+from util.constants import MEASURE_SAMPLE_RATE
 
 
 def get_log_path(in_path):
@@ -130,15 +124,15 @@ def analyze_dr(in_path: str, track_cb):
         dr_log_subitems = []
         dr_log_items.append((audio_info_part, dr_log_subitems))
 
-        samples_per_block = get_samples_per_block(audio_info_part)
-        audio_data = read_audio_data(audio_info_part, samples_per_block)
+        audio_data = read_audio_data(audio_info_part, 3 * MEASURE_SAMPLE_RATE)
         for track_samples, track_info in zip(audio_data.blocks_generator, audio_info_part.tracks):
             dr_metrics = compute_dr(pool, audio_info_part, track_samples)
             dr = dr_metrics.dr
             if track_cb:
                 track_cb(i, track_info, dr)
             dr_mean += dr
-            duration_seconds = round(dr_metrics.sample_count / audio_info_part.sample_rate)
+
+            duration_seconds = round(dr_metrics.sample_count / MEASURE_SAMPLE_RATE)
             dr_log_subitems.append(
                 (dr, dr_metrics.peak, dr_metrics.rms, duration_seconds, f"{(i+1):02d}-{track_info.name}"))
             i += 1
