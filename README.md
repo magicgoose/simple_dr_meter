@@ -5,7 +5,7 @@ This is a fully compliant Dynamic Range meter. It computes DR at defined by http
 
 * `ffmpeg` and `ffprobe` are on your PATH
 * CPython 3.6+
-* Python packages from PyPI: `numpy`
+* Python packages from PyPI: `numpy, chardet`
 
 ## How to use:
 
