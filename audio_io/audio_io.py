@@ -205,7 +205,13 @@ def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
         elif cmd == CueCmd.INDEX:
             track_start = False
             number, offset = args
-            if (index_number is None) or (index_number > number):
+
+            if len(tracks):
+                num_condition = lambda: index_number < number
+            else:
+                num_condition = lambda: index_number > number
+
+            if (index_number is None) or (number <= 1 and num_condition()):
                 index_number, index_offset = number, int(MEASURE_SAMPLE_RATE * offset)
         else:
             raise NotImplementedError
