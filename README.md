@@ -27,7 +27,7 @@ The main differences from dr14_t.meter are:
 * it can read ANY audio file with any number of channels, because all the complexity of decoding and reading tags is delegated to ffmpeg/ffprobe
 * supports CUE sheets as input!
 * audio file size is practically unlimited, because audio data isn't fully loaded into RAM
-* faster processing (how much — depends on environment, I plan to make it even faster in some cases, currently the parallelisation isn't really optimal yet) — and it's also faster than official foobar2000 plugin.
+* faster processing, even faster than the official foobar2000 plugin.
 
 on the other hand, it doesn't have any extra fancy features like graphs, etc. mainly because I don't need it, feel free to do pull requests anyway.
 
