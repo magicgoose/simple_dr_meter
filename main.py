@@ -9,7 +9,7 @@ from typing import Iterable, Tuple, NamedTuple
 import functools
 
 from audio_io import read_audio_info, read_audio_data
-from audio_io.audio_io import AudioSourceInfo
+from audio_io.audio_io import AudioSourceInfo, AudioSource
 from audio_metrics import compute_dr
 from util.constants import MEASURE_SAMPLE_RATE
 
@@ -110,31 +110,44 @@ def main():
 
 
 def analyze_dr(in_path: str, track_cb):
-    audio_info = read_audio_info(in_path)
+    audio_info = tuple(read_audio_info(in_path))
+    num_files = len(audio_info)
+    assert num_files > 0
 
     import multiprocessing.dummy as mt
     import multiprocessing
 
     cpu_count = multiprocessing.cpu_count()
-    thread_count = max(1, cpu_count - 1)
-    pool = mt.Pool(thread_count)
-    map_impl = functools.partial(pool.imap_unordered, chunksize=4)
-    # map_impl = map
 
-    def analyze_part(audio_info_part: AudioSourceInfo):
-        audio_data = read_audio_data(audio_info_part, 3 * MEASURE_SAMPLE_RATE)
+    def choose_map_impl(threads, *, ordered, chunksize):
+        if threads <= 1:
+            return map
+        pool = mt.Pool(threads)
+        return functools.partial(pool.imap if ordered else pool.imap_unordered, chunksize=chunksize)
+
+    threads_outer = max(1, min(num_files, cpu_count))
+    threads_inner = cpu_count // threads_outer
+    map_impl_outer = choose_map_impl(threads_outer, ordered=True, chunksize=1)
+    map_impl_inner = choose_map_impl(threads_inner, ordered=False, chunksize=4)
+
+    def analyze_part_tracks(audio_data: AudioSource, audio_info_part: AudioSourceInfo, map_impl):
         for track_samples, track_info in zip(audio_data.blocks_generator, audio_info_part.tracks):
             dr_metrics = compute_dr(map_impl, audio_info_part, track_samples)
-            yield track_samples, track_info, dr_metrics
+            yield track_info, dr_metrics
+
+    def analyze_part(map_impl, audio_info_part: AudioSourceInfo):
+        audio_data = read_audio_data(audio_info_part, 3 * MEASURE_SAMPLE_RATE)
+        return audio_info_part, analyze_part_tracks(audio_data, audio_info_part, map_impl)
 
     i = 0
     dr_mean = 0
     dr_log_items = []
-    for audio_info_part in audio_info:
+
+    def process_results(audio_info_part, analyzed_tracks):
+        nonlocal dr_mean, i
         dr_log_subitems = []
         dr_log_items.append((audio_info_part, dr_log_subitems))
-
-        for track_samples, track_info, dr_metrics in analyze_part(audio_info_part):
+        for track_info, dr_metrics in analyzed_tracks:
             dr = dr_metrics.dr
             if track_cb:
                 track_cb(i, track_info, dr)
@@ -144,6 +157,15 @@ def analyze_dr(in_path: str, track_cb):
             dr_log_subitems.append(
                 (dr, dr_metrics.peak, dr_metrics.rms, duration_seconds, f"{(i+1):02d}-{track_info.name}"))
             i += 1
+        pass
+
+    def process_part(map_impl, audio_info_part: AudioSourceInfo):
+        audio_info_part, analyzed_tracks = analyze_part(map_impl, audio_info_part)
+        process_results(audio_info_part, analyzed_tracks)
+
+    for x in map_impl_outer(functools.partial(process_part, map_impl_inner), audio_info):
+        pass
+
     dr_mean /= i
     dr_mean = round(dr_mean)  # it's now official
 
