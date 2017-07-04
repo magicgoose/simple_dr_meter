@@ -36,4 +36,3 @@ So, basically it's a simple and practically complete implementation of DR measur
 ## TODO:
 
 * Release it on PyPI! I have no experience with that but I should probably learn how to do this.
-* More optimizations, especially for the case when tracks are in separate files.
