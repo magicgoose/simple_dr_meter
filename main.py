@@ -6,6 +6,8 @@ import sys
 import time
 from typing import Iterable, Tuple, NamedTuple
 
+import functools
+
 from audio_io import read_audio_info, read_audio_data
 from audio_io.audio_io import AudioSourceInfo
 from audio_metrics import compute_dr
@@ -116,6 +118,14 @@ def analyze_dr(in_path: str, track_cb):
     cpu_count = multiprocessing.cpu_count()
     thread_count = max(1, cpu_count - 1)
     pool = mt.Pool(thread_count)
+    map_impl = functools.partial(pool.imap_unordered, chunksize=4)
+    # map_impl = map
+
+    def analyze_part(audio_info_part: AudioSourceInfo):
+        audio_data = read_audio_data(audio_info_part, 3 * MEASURE_SAMPLE_RATE)
+        for track_samples, track_info in zip(audio_data.blocks_generator, audio_info_part.tracks):
+            dr_metrics = compute_dr(map_impl, audio_info_part, track_samples)
+            yield track_samples, track_info, dr_metrics
 
     i = 0
     dr_mean = 0
@@ -124,9 +134,7 @@ def analyze_dr(in_path: str, track_cb):
         dr_log_subitems = []
         dr_log_items.append((audio_info_part, dr_log_subitems))
 
-        audio_data = read_audio_data(audio_info_part, 3 * MEASURE_SAMPLE_RATE)
-        for track_samples, track_info in zip(audio_data.blocks_generator, audio_info_part.tracks):
-            dr_metrics = compute_dr(pool, audio_info_part, track_samples)
+        for track_samples, track_info, dr_metrics in analyze_part(audio_info_part):
             dr = dr_metrics.dr
             if track_cb:
                 track_cb(i, track_info, dr)

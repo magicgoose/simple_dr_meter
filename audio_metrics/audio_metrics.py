@@ -5,6 +5,7 @@ from math import floor
 
 from audio_io.audio_io import AudioSourceInfo
 
+
 class DynamicRangeMetrics(NamedTuple):
     dr: int
     peak: float
@@ -12,7 +13,7 @@ class DynamicRangeMetrics(NamedTuple):
     sample_count: int
 
 
-def _calc_block_metrics(pool, samples: Iterator[np.ndarray], sample_count):
+def _calc_block_metrics(map_impl, samples: Iterator[np.ndarray], sample_count):
     def process_part(a: np.ndarray):
         length = a.shape[1]
         sample_count[0] += length
@@ -20,12 +21,12 @@ def _calc_block_metrics(pool, samples: Iterator[np.ndarray], sample_count):
         a = np.ascontiguousarray(a)
         peaks = np.max(np.abs(a), axis=1)
 
-        a **= 2  # original values are not needed after this point
+        a = a ** 2  # numpy sometimes created readonly array so a**=2 won't always work
         sum_sqr = np.sum(a, axis=1)
         rms = np.sqrt(2.0 * sum_sqr / length)
         return peaks, rms, sum_sqr
 
-    results = pool.imap_unordered(process_part, samples, chunksize=4)
+    results = map_impl(process_part, samples)
 
     for peaks, rms, sum_sqr in results:
         yield from peaks
