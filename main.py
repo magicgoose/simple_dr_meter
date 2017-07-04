@@ -97,8 +97,8 @@ def main():
     if os.path.exists(log_path):
         sys.exit('the log file already exists!')
 
-    def track_cb(i, track_info, dr):
-        print(f"{(i+1):02d} - {track_info.name}: DR{dr}")
+    def track_cb(track_info, dr):
+        print(f"{track_info.global_index:02d} - {track_info.name}: DR{dr}")
 
     t = time.time
     t1 = t()
@@ -119,16 +119,16 @@ def analyze_dr(in_path: str, track_cb):
 
     cpu_count = multiprocessing.cpu_count()
 
-    def choose_map_impl(threads, *, ordered, chunksize):
+    def choose_map_impl(threads, *, chunksize):
         if threads <= 1:
             return map
         pool = mt.Pool(threads)
-        return functools.partial(pool.imap if ordered else pool.imap_unordered, chunksize=chunksize)
+        return functools.partial(pool.imap_unordered, chunksize=chunksize)
 
     threads_outer = max(1, min(num_files, cpu_count))
     threads_inner = cpu_count // threads_outer
-    map_impl_outer = choose_map_impl(threads_outer, ordered=True, chunksize=1)
-    map_impl_inner = choose_map_impl(threads_inner, ordered=False, chunksize=4)
+    map_impl_outer = choose_map_impl(threads_outer, chunksize=1)
+    map_impl_inner = choose_map_impl(threads_inner, chunksize=4)
 
     def analyze_part_tracks(audio_data: AudioSource, audio_info_part: AudioSourceInfo, map_impl):
         for track_samples, track_info in zip(audio_data.blocks_generator, audio_info_part.tracks):
@@ -139,24 +139,23 @@ def analyze_dr(in_path: str, track_cb):
         audio_data = read_audio_data(audio_info_part, 3 * MEASURE_SAMPLE_RATE)
         return audio_info_part, analyze_part_tracks(audio_data, audio_info_part, map_impl)
 
-    i = 0
-    dr_mean = 0
+    dr_mean = []
     dr_log_items = []
 
     def process_results(audio_info_part, analyzed_tracks):
-        nonlocal dr_mean, i
+        nonlocal dr_mean
         dr_log_subitems = []
         dr_log_items.append((audio_info_part, dr_log_subitems))
         for track_info, dr_metrics in analyzed_tracks:
             dr = dr_metrics.dr
             if track_cb:
-                track_cb(i, track_info, dr)
-            dr_mean += dr
+                track_cb(track_info, dr)
+            dr_mean.append(dr)
 
             duration_seconds = round(dr_metrics.sample_count / MEASURE_SAMPLE_RATE)
             dr_log_subitems.append(
-                (dr, dr_metrics.peak, dr_metrics.rms, duration_seconds, f"{(i+1):02d}-{track_info.name}"))
-            i += 1
+                (dr, dr_metrics.peak, dr_metrics.rms, duration_seconds,
+                 f"{track_info.global_index:02d}-{track_info.name}"))
         pass
 
     def process_part(map_impl, audio_info_part: AudioSourceInfo):
@@ -166,7 +165,7 @@ def analyze_dr(in_path: str, track_cb):
     for x in map_impl_outer(functools.partial(process_part, map_impl_inner), audio_info):
         pass
 
-    dr_mean /= i
+    dr_mean = sum(dr_mean) / len(dr_mean)
     dr_mean = round(dr_mean)  # it's now official
 
     dr_log_items = make_log_groups(dr_log_items)

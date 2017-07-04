@@ -10,6 +10,7 @@ import sys
 from subprocess import DEVNULL, PIPE
 from typing import NamedTuple, Iterator, Sequence, Iterable, List
 
+import itertools
 import numpy as np
 from os import path
 
@@ -71,6 +72,7 @@ def get_file_kind(in_path: str) -> FileKind:
 
 
 class TrackInfo(NamedTuple):
+    global_index: int
     name: str
     offset_samples: int
 
@@ -150,6 +152,7 @@ def parse_cue(in_path):
 
 
 def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
+    global_track_counter = itertools.count(1)
     index_number = None
     index_offset = None
     last_file_path = None
@@ -171,7 +174,10 @@ def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
                 assert last_title_track is not None
                 assert index_offset is not None
                 # noinspection PyTypeChecker
-                tracks.append(TrackInfo(last_title_track, index_offset))
+                tracks.append(TrackInfo(
+                    global_index=next(global_track_counter),
+                    name=last_title_track,
+                    offset_samples=index_offset))
                 index_number = None
             if cmd == CueCmd.TRACK:
                 track_start = True
@@ -217,9 +223,9 @@ def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
             raise NotImplementedError
 
 
-def _audio_source_from_file(in_path) -> AudioSourceInfo:
+def _audio_source_from_file(in_path, track_index=1) -> AudioSourceInfo:
     p = _get_audio_properties(in_path)
-    track_info = TrackInfo(name=p.title, offset_samples=0)
+    track_info = TrackInfo(global_index=track_index, name=p.title, offset_samples=0)
     return AudioSourceInfo(
         path=in_path,
         name=p.title,
@@ -231,13 +237,14 @@ def _audio_source_from_file(in_path) -> AudioSourceInfo:
 
 
 def _audio_sources_from_folder(in_path) -> Iterable[AudioSourceInfo]:
+    track_counter = itertools.count(1)
     for dirpath, dirnames, filenames in os.walk(in_path, topdown=True):
         filenames = sorted(filenames, key=natural_sort_key)
         for f in filenames:
             _, ext = path.splitext(f)
             ext = ext[1:].lower()
             if ext in known_audio_extensions:
-                yield _audio_source_from_file(path.join(in_path, f))
+                yield _audio_source_from_file(path.join(in_path, f), track_index=next(track_counter))
             pass
         break
 
