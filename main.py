@@ -57,7 +57,8 @@ def write_log(out_path, dr_log_groups: Iterable[LogGroup], average_dr):
             w(f"{l1}\nAnalyzed: {group_name}\n{l1}\n\nDR         Peak         RMS     Duration Track\n{l1}\n")
             track_count = 0
             for dr, peak, rms, duration_sec, track_name in group.tracks_dr:
-                w(f"DR{str(dr).ljust(4)}"
+                dr_formatted = f"DR{str(dr).ljust(4)}" if dr is not None else "N/A   "
+                w(dr_formatted +
                   f"{peak:9.2f} dB"
                   f"{rms:9.2f} dB"
                   f"{format_time(duration_sec).rjust(10)} "
@@ -98,7 +99,8 @@ def main():
         sys.exit('the log file already exists!')
 
     def track_cb(track_info, dr):
-        print(f"{track_info.global_index:02d} - {track_info.name}: DR{dr}")
+        dr_formatted = f'DR{dr}' if dr is not None else 'N/A'
+        print(f"{track_info.global_index:02d} - {track_info.name}: {dr_formatted}")
 
     t = time.time
     t1 = t()
@@ -150,7 +152,8 @@ def analyze_dr(in_path: str, track_cb):
             dr = dr_metrics.dr
             if track_cb:
                 track_cb(track_info, dr)
-            dr_mean.append(dr)
+            if dr:
+                dr_mean.append(dr)
 
             duration_seconds = round(dr_metrics.sample_count / MEASURE_SAMPLE_RATE)
             dr_log_subitems.append(

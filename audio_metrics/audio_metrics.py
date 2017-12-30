@@ -1,7 +1,7 @@
+from math import floor
 from typing import NamedTuple, Iterator
 
 import numpy as np
-from math import floor
 
 from audio_io.audio_io import AudioSourceInfo
 
@@ -69,7 +69,11 @@ def compute_dr(pool, a: AudioSourceInfo, samples: Iterator[np.ndarray]) -> Dynam
     rms_sqr_sum = np.sum(rms, axis=0)
     dr_per_channel = -decibel(np.sqrt(rms_sqr_sum / rms_count) / total_second_peak)
 
-    dr = int(round(np.mean(dr_per_channel, axis=0)))
+    dr = np.mean(dr_per_channel, axis=0)
+    if dr > 0 and dr < 40:
+        dr = int(round(dr))
+    else:
+        dr = None
 
     peak_db = float(decibel(np.max(peaks)))
 
