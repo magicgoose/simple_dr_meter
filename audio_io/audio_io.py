@@ -324,7 +324,7 @@ def _read_audio_blocks(in_path, channel_count, samples_per_block, tracks: List[T
     max_bytes_per_block = bytes_per_sample * samples_per_block
 
     p = sp.Popen(
-        (ex_ffmpeg, '-v', 'error',
+        (ex_ffmpeg, '-loglevel', 'fatal',
          '-i', in_path,
          '-map', '0:a:0',
          '-c:a', 'pcm_f32le',

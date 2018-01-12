@@ -148,10 +148,10 @@ def analyze_dr(in_path: str, track_cb):
         nonlocal dr_mean
         dr_log_subitems = []
         dr_log_items.append((audio_info_part, dr_log_subitems))
+        track_results = []
         for track_info, dr_metrics in analyzed_tracks:
             dr = dr_metrics.dr
-            if track_cb:
-                track_cb(track_info, dr)
+            track_results.append((track_info, dr))
             if dr:
                 dr_mean.append(dr)
 
@@ -159,14 +159,15 @@ def analyze_dr(in_path: str, track_cb):
             dr_log_subitems.append(
                 (dr, dr_metrics.peak, dr_metrics.rms, duration_seconds,
                  f"{track_info.global_index:02d}-{track_info.name}"))
-        pass
+        return track_results
 
     def process_part(map_impl, audio_info_part: AudioSourceInfo):
         audio_info_part, analyzed_tracks = analyze_part(map_impl, audio_info_part)
-        process_results(audio_info_part, analyzed_tracks)
+        return process_results(audio_info_part, analyzed_tracks)
 
     for x in map_impl_outer(functools.partial(process_part, map_impl_inner), audio_info):
-        pass
+        for track_result in x:
+            track_cb(*track_result)
 
     dr_mean = sum(dr_mean) / len(dr_mean)
     dr_mean = round(dr_mean)  # it's now official
