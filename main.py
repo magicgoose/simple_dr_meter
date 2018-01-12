@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import functools
 import os
+import subprocess
 import sys
 import time
 from datetime import datetime
@@ -108,6 +109,16 @@ def main():
     print(f'Analyzed all tracks in {time.time() - time_start:.2f} seconds')
 
     write_log(log_path, dr_log_items, dr_mean_rounded)
+    fix_tty()
+
+
+def fix_tty():
+    """I don't know why this is needed, but it is. Otherwise the terminal may cease to
+    accept any keyboard input after this application finishes. Hopefully I will find
+    something better eventually."""
+    platform = sys.platform.lower()
+    if platform.startswith('darwin') or platform.startswith('linux'):
+        subprocess.run(('stty', 'sane'))
 
 
 def analyze_dr(in_path: str, track_cb):
