@@ -4,8 +4,8 @@ This is a fully compliant Dynamic Range meter. It computes DR at defined by http
 ## Prerequisites:
 
 * `ffmpeg` and `ffprobe` are on your PATH
-* CPython 3.6+
-* Python packages from PyPI: `numpy, chardet`
+* CPython 3.6+ (I don't think I am using anything specific to CPython, but I only test it on CPython)
+* Python packages from PyPI, listed in `requirements.txt` — can be installed with a command like `pip3 install -r requirements.txt`
 
 ## How to use:
 
