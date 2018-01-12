@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
+import argparse
 import functools
 import os
 import subprocess
 import sys
 import time
 from datetime import datetime
+from subprocess import DEVNULL
 from typing import Iterable, Tuple, NamedTuple
 
 import numpy
@@ -93,11 +95,30 @@ def make_log_groups(l: Iterable[Tuple[AudioSourceInfo, Iterable[Tuple[int, float
             tracks_dr=tracks_dr)
 
 
+def parse_args():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("input", help='Input file or directory')
+    ap.add_argument("--no-log", help='Do not write log (dr.txt), by default a log file is written after analysis', action='store_true')
+    args = sys.argv[1:]
+    if args:
+        return ap.parse_args(args)
+    else:
+        ap.print_help()
+        return None
+
+
 def main():
-    in_path = (len(sys.argv) > 1 and sys.argv[1]) or input()
-    log_path = get_log_path(in_path)
-    if os.path.exists(log_path):
-        sys.exit('the log file already exists!')
+    args = parse_args()
+    if not args:
+        return
+
+    in_path = args.input
+    should_write_log = not args.no_log
+
+    if should_write_log:
+        log_path = get_log_path(in_path)
+        if os.path.exists(log_path):
+            sys.exit('the log file already exists!')
 
     def track_cb(track_info, dr):
         dr_formatted = f'DR{dr}' if dr is not None else 'N/A'
@@ -108,7 +129,9 @@ def main():
     print(f'Official DR = {dr_mean_rounded}, Median DR = {dr_median}')
     print(f'Analyzed all tracks in {time.time() - time_start:.2f} seconds')
 
-    write_log(log_path, dr_log_items, dr_mean_rounded)
+    if should_write_log:
+        # noinspection PyUnboundLocalVariable
+        write_log(log_path, dr_log_items, dr_mean_rounded)
     fix_tty()
 
 
@@ -118,7 +141,7 @@ def fix_tty():
     something better eventually."""
     platform = sys.platform.lower()
     if platform.startswith('darwin') or platform.startswith('linux'):
-        subprocess.run(('stty', 'sane'))
+        subprocess.run(('stty', 'sane'), stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL)
 
 
 def analyze_dr(in_path: str, track_cb):
