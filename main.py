@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-from datetime import datetime
+import functools
 import os
 import sys
-
 import time
+from datetime import datetime
 from typing import Iterable, Tuple, NamedTuple
 
-import functools
+import numpy
 
 from audio_io import read_audio_info, read_audio_data
 from audio_io.audio_io import AudioSourceInfo, AudioSource
@@ -102,13 +102,12 @@ def main():
         dr_formatted = f'DR{dr}' if dr is not None else 'N/A'
         print(f"{track_info.global_index:02d} - {track_info.name}: {dr_formatted}")
 
-    t = time.time
-    t1 = t()
-    dr_log_items, dr_mean = analyze_dr(in_path, track_cb)
-    t2 = t()
-    print(f'Analyzed all tracks in {t2-t1:.2f} seconds')
+    time_start = time.time()
+    dr_log_items, dr_mean_rounded, dr_median = analyze_dr(in_path, track_cb)
+    print(f'Official DR = {dr_mean_rounded}, Median DR = {dr_median}')
+    print(f'Analyzed all tracks in {time.time() - time_start:.2f} seconds')
 
-    write_log(log_path, dr_log_items, dr_mean)
+    write_log(log_path, dr_log_items, dr_mean_rounded)
 
 
 def analyze_dr(in_path: str, track_cb):
@@ -141,11 +140,11 @@ def analyze_dr(in_path: str, track_cb):
         audio_data = read_audio_data(audio_info_part, 3 * MEASURE_SAMPLE_RATE)
         return audio_info_part, analyze_part_tracks(audio_data, audio_info_part, map_impl)
 
-    dr_mean = []
+    dr_items = []
     dr_log_items = []
 
     def process_results(audio_info_part, analyzed_tracks):
-        nonlocal dr_mean
+        nonlocal dr_items
         dr_log_subitems = []
         dr_log_items.append((audio_info_part, dr_log_subitems))
         track_results = []
@@ -153,7 +152,7 @@ def analyze_dr(in_path: str, track_cb):
             dr = dr_metrics.dr
             track_results.append((track_info, dr))
             if dr:
-                dr_mean.append(dr)
+                dr_items.append(dr)
 
             duration_seconds = round(dr_metrics.sample_count / MEASURE_SAMPLE_RATE)
             dr_log_subitems.append(
@@ -169,11 +168,11 @@ def analyze_dr(in_path: str, track_cb):
         for track_result in x:
             track_cb(*track_result)
 
-    dr_mean = sum(dr_mean) / len(dr_mean)
-    dr_mean = round(dr_mean)  # it's now official
+    dr_mean_rounded = int(numpy.round(numpy.mean(dr_items)))  # official
+    dr_median = numpy.median(dr_items)
 
     dr_log_items = make_log_groups(dr_log_items)
-    return dr_log_items, dr_mean
+    return dr_log_items, dr_mean_rounded, dr_median
 
 
 if __name__ == '__main__':
