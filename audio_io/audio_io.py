@@ -285,17 +285,17 @@ def _test_ffmpeg():
 
 
 def _parse_audio_params(s) -> AudioFileParams:
-    d = defaultdict(lambda: "(unknown)")
+    d = defaultdict(lambda: '(unknown)')
     for m in re.finditer(r'([a-zA-Z_:]+)=(.+)', s):
         v = m.groups()
-        d[v[0]] = v[1]
+        d[v[0].lower()] = v[1]
 
     return AudioFileParams(
-        int(d["channels"]),
-        int(d["sample_rate"]),
-        d["TAG:TITLE"],
-        d["TAG:ARTIST"],
-        d["TAG:ALBUM"])
+        int(d['channels']),
+        int(d['sample_rate']),
+        d['tag:title'],
+        d['tag:artist'],
+        d['tag:album'])
 
 
 def _get_params(in_path) -> AudioFileParams:
