@@ -2,11 +2,9 @@
 import argparse
 import functools
 import os
-import subprocess
 import sys
 import time
 from datetime import datetime
-from subprocess import DEVNULL
 from typing import Iterable, Tuple, NamedTuple
 
 import numpy
@@ -141,7 +139,7 @@ def fix_tty():
     something better eventually."""
     platform = sys.platform.lower()
     if platform.startswith('darwin') or platform.startswith('linux'):
-        subprocess.run(('stty', 'sane'), stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL)
+        os.system('stty sane')
 
 
 def analyze_dr(in_path: str, track_cb):
@@ -185,6 +183,7 @@ def analyze_dr(in_path: str, track_cb):
         for track_info, dr_metrics in analyzed_tracks:
             dr = dr_metrics.dr
             track_results.append((track_info, dr))
+            track_cb(track_info, dr)
             if dr:
                 dr_items.append(dr)
 
@@ -200,7 +199,7 @@ def analyze_dr(in_path: str, track_cb):
 
     for x in map_impl_outer(functools.partial(process_part, map_impl_inner), audio_info):
         for track_result in x:
-            track_cb(*track_result)
+            pass  # we need to go through all items for the side effects
 
     dr_mean_rounded = int(numpy.round(numpy.mean(dr_items)))  # official
     dr_median = numpy.median(dr_items)

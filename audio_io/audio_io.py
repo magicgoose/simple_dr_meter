@@ -1,20 +1,17 @@
+import itertools
+import os
 import re
 import subprocess as sp
+import sys
 from collections import defaultdict
 from fractions import Fraction
 from numbers import Number
-
-import chardet
-
-import sys
+from os import path
 from subprocess import DEVNULL, PIPE
 from typing import NamedTuple, Iterator, Sequence, Iterable, List
 
-import itertools
+import chardet
 import numpy as np
-from os import path
-
-import os
 
 from util.constants import MEASURE_SAMPLE_RATE
 from util.natural_sort import natural_sort_key
