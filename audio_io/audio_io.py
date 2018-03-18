@@ -5,6 +5,7 @@ import subprocess as sp
 import sys
 from collections import defaultdict
 from fractions import Fraction
+from io import BufferedIOBase
 from numbers import Number
 from os import path
 from subprocess import DEVNULL, PIPE
@@ -135,17 +136,16 @@ def _parse_cue_cmd(line: str):
 
 
 def parse_cue(in_path):
-    """returns all entries of CUE and True when done"""
-    # detect file encoding
     with open(in_path, 'rb') as f:
-        raw = f.read(32)  # at most 32 bytes are returned
-        encoding = chardet.detect(raw)['encoding']
-    with open(in_path, 'r', encoding=encoding) as f:
-        for line in f:
-            cmd = _parse_cue_cmd(line)
-            if cmd:
-                yield cmd
-        yield CueCmd.EOF, None
+        assert isinstance(f, BufferedIOBase)
+        content = f.read()
+    encoding = chardet.detect(content)['encoding']
+    content_text = content.decode(encoding)
+    for line in content_text.splitlines():
+        cmd = _parse_cue_cmd(line)
+        if cmd:
+            yield cmd
+    yield CueCmd.EOF, None
 
 
 def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:

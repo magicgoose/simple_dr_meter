@@ -70,7 +70,7 @@ def compute_dr(pool, a: AudioSourceInfo, samples: Iterator[np.ndarray]) -> Dynam
     dr_per_channel = -decibel(np.sqrt(rms_sqr_sum / rms_count) / total_second_peak)
 
     dr = np.mean(dr_per_channel, axis=0)
-    if dr > 0 and dr < 40:
+    if 0 < dr < 40:
         dr = int(round(dr))
     else:
         dr = None

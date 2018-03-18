@@ -139,7 +139,8 @@ def fix_tty():
     something better eventually."""
     platform = sys.platform.lower()
     if platform.startswith('darwin') or platform.startswith('linux'):
-        os.system('stty sane')
+        if os.isatty(sys.stdin.fileno()):
+            os.system('stty sane')
 
 
 def analyze_dr(in_path: str, track_cb):
