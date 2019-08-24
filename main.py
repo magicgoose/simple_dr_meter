@@ -96,7 +96,8 @@ def make_log_groups(l: Iterable[Tuple[AudioSourceInfo, Iterable[Tuple[int, float
 def parse_args():
     ap = argparse.ArgumentParser()
     ap.add_argument("input", help='Input file or directory')
-    ap.add_argument("--no-log", help='Do not write log (dr.txt), by default a log file is written after analysis', action='store_true')
+    ap.add_argument("--no-log", help='Do not write log (dr.txt), by default a log file is written after analysis',
+                    action='store_true')
     ap.add_argument("--keep-precision", help='Do not round values, this also disables log', action='store_true')
     args = sys.argv[1:]
     if args:
@@ -111,7 +112,7 @@ def main():
     if not args:
         return
 
-    in_path = args.input
+    in_path = os.path.expanduser(args.input)
     should_write_log = not args.no_log and not args.keep_precision
     keep_precision = args.keep_precision
 
