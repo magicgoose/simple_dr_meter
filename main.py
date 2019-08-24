@@ -97,6 +97,7 @@ def parse_args():
     ap = argparse.ArgumentParser()
     ap.add_argument("input", help='Input file or directory')
     ap.add_argument("--no-log", help='Do not write log (dr.txt), by default a log file is written after analysis', action='store_true')
+    ap.add_argument("--keep-precision", help='Do not round values, this also disables log', action='store_true')
     args = sys.argv[1:]
     if args:
         return ap.parse_args(args)
@@ -111,7 +112,8 @@ def main():
         return
 
     in_path = args.input
-    should_write_log = not args.no_log
+    should_write_log = not args.no_log and not args.keep_precision
+    keep_precision = args.keep_precision
 
     if should_write_log:
         log_path = get_log_path(in_path)
@@ -123,13 +125,13 @@ def main():
         print(f"{track_info.global_index:02d} - {track_info.name}: {dr_formatted}")
 
     time_start = time.time()
-    dr_log_items, dr_mean_rounded, dr_median = analyze_dr(in_path, track_cb)
-    print(f'Official DR = {dr_mean_rounded}, Median DR = {dr_median}')
+    dr_log_items, dr_mean, dr_median = analyze_dr(in_path, track_cb, keep_precision)
+    print(f'Official DR = {dr_mean}, Median DR = {dr_median}')
     print(f'Analyzed all tracks in {time.time() - time_start:.2f} seconds')
 
     if should_write_log:
         # noinspection PyUnboundLocalVariable
-        write_log(log_path, dr_log_items, dr_mean_rounded)
+        write_log(log_path, dr_log_items, dr_mean)
     fix_tty()
 
 
@@ -143,7 +145,7 @@ def fix_tty():
             os.system('stty sane')
 
 
-def analyze_dr(in_path: str, track_cb):
+def analyze_dr(in_path: str, track_cb, keep_precision: bool):
     audio_info = tuple(read_audio_info(in_path))
     num_files = len(audio_info)
     assert num_files > 0
@@ -166,7 +168,7 @@ def analyze_dr(in_path: str, track_cb):
 
     def analyze_part_tracks(audio_data: AudioSource, audio_info_part: AudioSourceInfo, map_impl):
         for track_samples, track_info in zip(audio_data.blocks_generator, audio_info_part.tracks):
-            dr_metrics = compute_dr(map_impl, audio_info_part, track_samples)
+            dr_metrics = compute_dr(map_impl, audio_info_part, track_samples, keep_precision)
             yield track_info, dr_metrics
 
     def analyze_part(map_impl, audio_info_part: AudioSourceInfo):
@@ -202,7 +204,10 @@ def analyze_dr(in_path: str, track_cb):
         for track_result in x:
             pass  # we need to go through all items for the side effects
 
-    dr_mean_rounded = int(numpy.round(numpy.mean(dr_items)))  # official
+    if keep_precision:
+        dr_mean_rounded = numpy.mean(dr_items)
+    else:
+        dr_mean_rounded = int(numpy.round(numpy.mean(dr_items)))  # official
     dr_median = numpy.median(dr_items)
 
     dr_log_items = make_log_groups(dr_log_items)

@@ -4,23 +4,19 @@ import re
 import subprocess as sp
 import sys
 from collections import defaultdict
-from fractions import Fraction
-from io import BufferedIOBase
-from numbers import Number
 from os import path
 from subprocess import DEVNULL, PIPE
 from typing import NamedTuple, Iterator, Sequence, Iterable, List
+from enum import Enum, auto
 
-import chardet
 import numpy as np
 
+from audio_io.cue.cue_parser import CueCmd, parse_cue
 from util.constants import MEASURE_SAMPLE_RATE
 from util.natural_sort import natural_sort_key
 
 ex_ffprobe = 'ffprobe'
 ex_ffmpeg = 'ffmpeg'
-
-from enum import Enum, auto
 
 known_audio_extensions = {
     'aac',
@@ -49,15 +45,6 @@ class FileKind(Enum):
     CUE = auto()
     FOLDER = auto()
     AUDIO = auto()
-
-
-class CueCmd(Enum):
-    PERFORMER = auto()
-    TITLE = auto()
-    FILE = auto()
-    TRACK = auto()
-    INDEX = auto()
-    EOF = auto()
 
 
 def get_file_kind(in_path: str) -> FileKind:
@@ -97,55 +84,6 @@ class AudioSource(NamedTuple):
     source_info: AudioSourceInfo
     samples_per_block: int
     blocks_generator: Iterator[Iterator[np.ndarray]]
-
-
-_whitespace_pattern = re.compile('\s+')
-
-
-def _unquote(s: str):
-    return s[1 + s.index('"'):s.rindex('"')]
-
-
-def parse_cd_time(offset: str) -> Number:
-    """parse time in CDDA (75fps) format to seconds, exactly
-    MM:SS:FF"""
-    m, s, f = map(int, offset.split(':'))
-    return m * 60 + s + Fraction(f, 75)
-
-
-def _parse_cue_cmd(line: str):
-    line = line.strip()
-    cmd, args = _whitespace_pattern.split(line, 1)
-    if cmd == 'PERFORMER':
-        return CueCmd.PERFORMER, _unquote(args)
-    if cmd == 'TITLE':
-        return CueCmd.TITLE, _unquote(args)
-    if cmd == 'FILE':
-        return CueCmd.FILE, _unquote(args)
-    if cmd == 'TRACK':
-        number, _ = _whitespace_pattern.split(args, 1)
-        number = int(number)
-        return CueCmd.TRACK, number
-    if cmd == 'INDEX':
-        number, offset = _whitespace_pattern.split(args, 1)
-        number = int(number)
-        offset = parse_cd_time(offset)
-        return CueCmd.INDEX, number, offset
-
-    return None
-
-
-def parse_cue(in_path):
-    with open(in_path, 'rb') as f:
-        assert isinstance(f, BufferedIOBase)
-        content = f.read()
-    encoding = chardet.detect(content)['encoding']
-    content_text = content.decode(encoding)
-    for line in content_text.splitlines():
-        cmd = _parse_cue_cmd(line)
-        if cmd:
-            yield cmd
-    yield CueCmd.EOF, None
 
 
 def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
@@ -242,7 +180,6 @@ def _audio_sources_from_folder(in_path) -> Iterable[AudioSourceInfo]:
             ext = ext[1:].lower()
             if ext in known_audio_extensions:
                 yield _audio_source_from_file(path.join(in_path, f), track_index=next(track_counter))
-            pass
         break
 
 
@@ -302,11 +239,11 @@ def _get_params(in_path) -> AudioFileParams:
     p = sp.Popen(
         (ex_ffprobe,
          '-v', 'error',
-         '-select_streams', '0:a:0',
+         '-select_streams', 'a:0',
          '-show_entries', 'stream=channels,sample_rate',
          '-show_entries', 'format_tags=title,artist,album',
          in_path),
-        stdout=PIPE)
+        stdout=PIPE, stderr=PIPE)
     out, err = p.communicate()
     returncode = p.returncode
     if returncode != 0:
