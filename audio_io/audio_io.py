@@ -67,6 +67,7 @@ class AudioFileParams(NamedTuple):
     title: str
     artist: str
     album: str
+    cuesheet: str or None
 
 
 class AudioSourceInfo(NamedTuple):
@@ -159,6 +160,7 @@ def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
 
 def _audio_source_from_file(in_path, track_index=1) -> AudioSourceInfo:
     p = _get_audio_properties(in_path)
+    # TODO: use embedded cue if present
     track_info = TrackInfo(global_index=track_index, name=p.title, offset_samples=0)
     return AudioSourceInfo(
         path=in_path,
@@ -237,7 +239,8 @@ def _parse_audio_params(data_from_ffprobe: dict) -> AudioFileParams:
         sample_rate=int(get('streams', 0, 'sample_rate')),
         title=get('format', 'tags', 'TITLE', default_value=default_tag_value),
         album=get('format', 'tags', 'ALBUM', default_value=default_tag_value),
-        artist=get('format', 'tags', 'ARTIST', default_value=default_tag_value))
+        artist=get('format', 'tags', 'ARTIST', default_value=default_tag_value),
+        cuesheet=get('format', 'tags', 'CUESHEET'))
 
 
 def _get_params(in_path) -> AudioFileParams:
@@ -247,7 +250,7 @@ def _get_params(in_path) -> AudioFileParams:
          '-print_format', 'json',
          '-select_streams', 'a:0',
          '-show_entries', 'stream=channels,sample_rate',
-         '-show_entries', 'format_tags=title,artist,album',
+         '-show_entries', 'format_tags=title,artist,album,cuesheet',
          in_path),
         stdout=PIPE, stderr=PIPE)
     out, err = p.communicate()
