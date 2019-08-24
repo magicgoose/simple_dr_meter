@@ -16,6 +16,8 @@ where `<input>` is one of:
 * a CUE sheet (.cue file)
 * a single audio file
 
+An audio file may also contain an embedded cuesheet, it will be used if found.
+
 It will generate `dr.txt` with the proper DR log inside the target folder (or next to the input file), and show something in the stdout while working. That's it.
 
 ## Some extra words:
