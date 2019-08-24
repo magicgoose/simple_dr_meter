@@ -54,13 +54,16 @@ def _parse_cue_cmd(line: str, offset_in_seconds: bool = True):
     return None
 
 
-def parse_cue(in_path, offset_in_seconds: bool = True) -> Iterable[tuple]:
+def read_cue_from_file(in_path: str) -> str:
     with open(in_path, 'rb') as f:
         assert isinstance(f, BufferedIOBase)
         content = f.read()
     encoding = chardet.detect(content)['encoding']
-    content_text = content.decode(encoding)
-    for line in content_text.splitlines():
+    return content.decode(encoding)
+
+
+def parse_cue_str(content: str, offset_in_seconds: bool = True) -> Iterable[tuple]:
+    for line in content.splitlines():
         cmd = _parse_cue_cmd(line, offset_in_seconds)
         if cmd:
             yield cmd

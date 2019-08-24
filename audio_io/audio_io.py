@@ -10,7 +10,7 @@ from typing import NamedTuple, Iterator, Sequence, Iterable, List
 
 import numpy as np
 
-from audio_io.cue.cue_parser import CueCmd, parse_cue
+from audio_io.cue.cue_parser import CueCmd, parse_cue_str, read_cue_from_file
 from util.constants import MEASURE_SAMPLE_RATE
 from util.natural_sort import natural_sort_key
 
@@ -62,6 +62,7 @@ class TrackInfo(NamedTuple):
 
 
 class AudioFileParams(NamedTuple):
+    file_path: str
     channel_count: int
     sample_rate: int
     title: str
@@ -86,7 +87,9 @@ class AudioSource(NamedTuple):
     blocks_generator: Iterator[Iterator[np.ndarray]]
 
 
-def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
+def _translate_from_cue(cue_items,
+                        directory_path=None,
+                        parent_audio_file: AudioFileParams = None) -> Iterable[AudioSourceInfo]:
     global_track_counter = itertools.count(1)
     index_number = None
     index_offset = None
@@ -132,9 +135,16 @@ def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
             if cmd == CueCmd.EOF:
                 return
 
-            last_file_path = join(directory_path, args[0])
-            p = _get_audio_properties(last_file_path)
-            channel_count, sample_rate = p.channel_count, p.sample_rate
+            if directory_path:
+                last_file_path = join(directory_path, args[0])
+                p = _get_audio_properties(last_file_path)
+                channel_count, sample_rate = p.channel_count, p.sample_rate
+            elif parent_audio_file:
+                last_file_path = parent_audio_file.file_path
+                channel_count = parent_audio_file.channel_count
+                sample_rate = parent_audio_file.sample_rate
+            else:
+                raise ValueError
         elif cmd == CueCmd.TITLE:
             if track_start:
                 last_title_track = args[0]
@@ -158,18 +168,24 @@ def _translate_from_cue(directory_path, cue_items) -> Iterable[AudioSourceInfo]:
             raise NotImplementedError
 
 
-def _audio_source_from_file(in_path, track_index=1) -> AudioSourceInfo:
-    p = _get_audio_properties(in_path)
-    # TODO: use embedded cue if present
+def _single_track_audio_source(p: AudioFileParams, track_index):
     track_info = TrackInfo(global_index=track_index, name=p.title, offset_samples=0)
     return AudioSourceInfo(
-        path=in_path,
+        path=p.file_path,
         name=p.title,
         performers=(p.artist,),
         album=p.album,
         channel_count=p.channel_count,
         sample_rate=p.sample_rate,
         tracks=[track_info])
+
+
+def _audio_source_from_file(in_path, track_index=1) -> AudioSourceInfo:
+    p = _get_audio_properties(in_path)
+    if not p.cuesheet:
+        return _single_track_audio_source(p, track_index)
+    cue_entries = parse_cue_str(p.cuesheet)
+    return next(iter(_translate_from_cue(cue_entries, parent_audio_file=p)))
 
 
 def _audio_sources_from_folder(in_path) -> Iterable[AudioSourceInfo]:
@@ -193,8 +209,8 @@ def read_audio_info(in_path: str) -> Iterable[AudioSourceInfo]:
     if kind == FileKind.FOLDER:
         yield from _audio_sources_from_folder(in_path)
     elif kind == FileKind.CUE:
-        directory_path = os.path.dirname(in_path)
-        yield from _translate_from_cue(directory_path, parse_cue(in_path))
+        cue_str = read_cue_from_file(in_path)
+        yield from _translate_from_cue(parse_cue_str(cue_str), directory_path=os.path.dirname(in_path))
     elif kind == FileKind.AUDIO:
         yield _audio_source_from_file(in_path)
     else:
@@ -222,7 +238,7 @@ def _test_ffmpeg():
         sys.exit('ffmpeg not installed, broken or not on PATH')
 
 
-def _parse_audio_params(data_from_ffprobe: dict) -> AudioFileParams:
+def _parse_audio_params(in_path: str, data_from_ffprobe: dict) -> AudioFileParams:
     default_tag_value = '(unknown)'
 
     def get(*keys, default_value=None):
@@ -235,6 +251,7 @@ def _parse_audio_params(data_from_ffprobe: dict) -> AudioFileParams:
         return d
 
     return AudioFileParams(
+        file_path=in_path,
         channel_count=int(get('streams', 0, 'channels')),
         sample_rate=int(get('streams', 0, 'sample_rate')),
         title=get('format', 'tags', 'TITLE', default_value=default_tag_value),
@@ -257,7 +274,7 @@ def _get_params(in_path) -> AudioFileParams:
     returncode = p.returncode
     if returncode != 0:
         raise Exception('ffprobe returned {}'.format(returncode))
-    return _parse_audio_params(json.loads(out, encoding='utf-8'))
+    return _parse_audio_params(in_path, json.loads(out, encoding='utf-8'))
 
 
 def _read_audio_blocks(in_path, channel_count, samples_per_block, tracks: List[TrackInfo]) -> \
