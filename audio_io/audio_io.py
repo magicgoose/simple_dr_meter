@@ -1,13 +1,12 @@
 import itertools
+import json
 import os
-import re
 import subprocess as sp
 import sys
-from collections import defaultdict
+from enum import Enum, auto
 from os import path
 from subprocess import DEVNULL, PIPE
 from typing import NamedTuple, Iterator, Sequence, Iterable, List
-from enum import Enum, auto
 
 import numpy as np
 
@@ -221,24 +220,31 @@ def _test_ffmpeg():
         sys.exit('ffmpeg not installed, broken or not on PATH')
 
 
-def _parse_audio_params(s) -> AudioFileParams:
-    d = defaultdict(lambda: '(unknown)')
-    for m in re.finditer(r'([a-zA-Z_:]+)=(.+)', s):
-        v = m.groups()
-        d[v[0].lower()] = v[1]
+def _parse_audio_params(data_from_ffprobe: dict) -> AudioFileParams:
+    default_tag_value = '(unknown)'
+
+    def get(*keys, default_value=None):
+        d = data_from_ffprobe
+        for k in keys:
+            try:
+                d = d[k]
+            except (KeyError, IndexError):
+                return default_value
+        return d
 
     return AudioFileParams(
-        int(d['channels']),
-        int(d['sample_rate']),
-        d['tag:title'],
-        d['tag:artist'],
-        d['tag:album'])
+        channel_count=int(get('streams', 0, 'channels')),
+        sample_rate=int(get('streams', 0, 'sample_rate')),
+        title=get('format', 'tags', 'TITLE', default_value=default_tag_value),
+        album=get('format', 'tags', 'ALBUM', default_value=default_tag_value),
+        artist=get('format', 'tags', 'ARTIST', default_value=default_tag_value))
 
 
 def _get_params(in_path) -> AudioFileParams:
     p = sp.Popen(
         (ex_ffprobe,
          '-v', 'error',
+         '-print_format', 'json',
          '-select_streams', 'a:0',
          '-show_entries', 'stream=channels,sample_rate',
          '-show_entries', 'format_tags=title,artist,album',
@@ -248,8 +254,7 @@ def _get_params(in_path) -> AudioFileParams:
     returncode = p.returncode
     if returncode != 0:
         raise Exception('ffprobe returned {}'.format(returncode))
-    out = out.decode('utf-8')
-    return _parse_audio_params(out)
+    return _parse_audio_params(json.loads(out, encoding='utf-8'))
 
 
 def _read_audio_blocks(in_path, channel_count, samples_per_block, tracks: List[TrackInfo]) -> \
