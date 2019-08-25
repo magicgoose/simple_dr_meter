@@ -14,6 +14,7 @@ class CueCmd(Enum):
     FILE = auto()
     TRACK = auto()
     INDEX = auto()
+    REM = auto()
     EOF = auto()
 
 
@@ -22,6 +23,7 @@ def _unquote(s: str):
 
 
 _whitespace_pattern = re.compile(r'\s+')
+_rem_tag_pattern = re.compile(r'([A-Z_]+) (.+)')
 
 
 def parse_cd_time(offset: str) -> Number:
@@ -50,6 +52,9 @@ def _parse_cue_cmd(line: str, offset_in_seconds: bool = True):
         if offset_in_seconds:
             offset = parse_cd_time(offset)
         return CueCmd.INDEX, number, offset
+    if cmd == 'REM':
+        tag_name, tag_value = _rem_tag_pattern.fullmatch(args).groups()
+        return CueCmd.REM, tag_name, tag_value
 
     return None
 

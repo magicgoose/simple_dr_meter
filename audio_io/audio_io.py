@@ -191,6 +191,8 @@ def _translate_from_cue(cue_items,
 
             if (index_number is None) or (number <= 1 and num_condition()):
                 index_number, index_offset = number, int(MEASURE_SAMPLE_RATE * offset)
+        elif cmd == CueCmd.REM:
+            add_tag(args[0], args[1], is_global=not track_start)
         else:
             raise NotImplementedError
 
@@ -284,7 +286,7 @@ def read_audio_file_metadata(in_path) -> AudioFileMetadata:
          '-print_format', 'json',
          '-select_streams', 'a:0',
          '-show_entries', 'stream=channels,sample_rate',
-         '-show_entries', 'format_tags=title,artist,album,cuesheet',
+         '-show_entries', 'format_tags',
          in_path),
         stdout=PIPE, stderr=PIPE)
     out, err = p.communicate()
