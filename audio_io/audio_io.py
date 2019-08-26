@@ -4,14 +4,14 @@ import os
 import subprocess as sp
 import sys
 from enum import Enum, auto
+from numbers import Number
 from os import path
 from subprocess import DEVNULL, PIPE
-from typing import NamedTuple, Iterator, Sequence, Iterable, List, Optional
+from typing import NamedTuple, Iterator, Iterable, List, Optional, Sequence
 
 import numpy as np
 
 from audio_io.cue.cue_parser import CueCmd, parse_cue_str, read_cue_from_file
-from util.constants import MEASURE_SAMPLE_RATE
 from util.natural_sort import natural_sort_key
 
 ex_ffprobe = 'ffprobe'
@@ -82,7 +82,7 @@ def get_file_kind(in_path: str) -> FileKind:
 
 class TrackInfo(NamedTuple):
     global_index: int
-    offset_samples: int
+    offset_seconds: Number
     tags: dict
 
 
@@ -113,7 +113,7 @@ def _translate_from_cue(cue_items,
                         parent_audio_file: AudioFileMetadata = None) -> Iterable[AudioSourceInfo]:
     global_track_counter = itertools.count(1)
     index_number = None
-    index_offset = None
+    index_offset_seconds = None
     last_file_path = None
     channel_count = None
     sample_rate = None
@@ -137,11 +137,11 @@ def _translate_from_cue(cue_items,
     for cmd, *args in cue_items:
         if cmd == CueCmd.TRACK or cmd == CueCmd.FILE or cmd == CueCmd.EOF:
             if index_number is not None:
-                assert index_offset is not None
+                assert index_offset_seconds is not None
                 # noinspection PyTypeChecker
                 tracks.append(TrackInfo(
                     global_index=next(global_track_counter),
-                    offset_samples=index_offset,
+                    offset_seconds=index_offset_seconds,
                     tags=track_tags
                 ))
                 track_tags = dict(global_tags)
@@ -190,7 +190,7 @@ def _translate_from_cue(cue_items,
                 num_condition = lambda: index_number > number
 
             if (index_number is None) or (number <= 1 and num_condition()):
-                index_number, index_offset = number, int(MEASURE_SAMPLE_RATE * offset)
+                index_number, index_offset_seconds = number, offset
         elif cmd == CueCmd.REM:
             add_tag(args[0], args[1], is_global=not track_start)
         else:
@@ -198,7 +198,7 @@ def _translate_from_cue(cue_items,
 
 
 def _single_track_audio_source(p: AudioFileMetadata, track_index):
-    track_info = TrackInfo(global_index=track_index, offset_samples=0, tags=p.tags)
+    track_info = TrackInfo(global_index=track_index, offset_seconds=0, tags=p.tags)
     return AudioSourceInfo(
         file_path=p.file_path,
         channel_count=p.channel_count,
@@ -244,11 +244,18 @@ def read_audio_info(in_path: str) -> Iterable[AudioSourceInfo]:
         raise NotImplementedError
 
 
-def read_audio_data(audio_source: AudioSourceInfo, samples_per_block: int) -> AudioData:
-    audio_blocks = _read_audio_blocks(audio_source.file_path,
-                                      audio_source.channel_count,
+def read_audio_data(audio_source: AudioSourceInfo,
+                    samples_per_block: int,
+                    ffmpeg_args: Sequence[str],
+                    bytes_per_sample_mono: int,
+                    numpy_sample_type: str,
+                    sample_rate: Optional[int] = None) -> AudioData:
+    audio_blocks = _read_audio_blocks(audio_source,
                                       samples_per_block,
-                                      audio_source.tracks)
+                                      ffmpeg_args,
+                                      bytes_per_sample_mono,
+                                      numpy_sample_type,
+                                      sample_rate)
     return AudioData(audio_source, samples_per_block, audio_blocks)
 
 
@@ -298,35 +305,34 @@ def read_audio_file_metadata(in_path) -> AudioFileMetadata:
     return audio_metadata
 
 
-def _read_audio_blocks(in_path, channel_count, samples_per_block, tracks: List[TrackInfo]) -> \
-        Iterator[Iterator[np.ndarray]]:
-    bytes_per_sample = 4 * channel_count
+def _read_audio_blocks(audio_source: AudioSourceInfo,
+                       samples_per_block: int,
+                       ffmpeg_args: Sequence[str],
+                       bytes_per_sample_mono: int,
+                       numpy_sample_type: str,
+                       sample_rate: Optional[int] = None) -> Iterator[Iterator[np.ndarray]]:
+    bytes_per_sample = bytes_per_sample_mono * audio_source.channel_count
     max_bytes_per_block = bytes_per_sample * samples_per_block
+    sample_rate = sample_rate or audio_source.sample_rate
 
-    p = sp.Popen(
-        (ex_ffmpeg, '-loglevel', 'fatal',
-         '-i', in_path,
-         '-map', '0:a:0',
-         '-c:a', 'pcm_f32le',
-         '-ar', str(MEASURE_SAMPLE_RATE),
-         # ^ because apparently official meter resamples to 44k before measuring;
-         # using default low quality resampling because it doesn't affect measurements and is faster
-         '-f', 'f32le',
-         '-'),
-        stderr=None,
-        stdout=PIPE)
+    # noinspection PyTypeChecker
+    def seconds_to_samples(seconds: Number):
+        return int(sample_rate * seconds)
 
-    sample_type = np.dtype('<f4')
+    # noinspection PyTypeChecker
+    p = sp.Popen((ex_ffmpeg,) + ffmpeg_args, stderr=None, stdout=PIPE)
+
+    sample_type = np.dtype(numpy_sample_type)
     frombuffer = np.frombuffer
     reshape = np.reshape
     with p.stdout as f:
-        skip_samples = tracks[0].offset_samples
+        skip_samples = seconds_to_samples(audio_source.tracks[0].offset_seconds)
         if skip_samples > 0:
             f.read(bytes_per_sample * skip_samples)
 
         def make_array(buffer, size):
-            a = frombuffer(buffer, dtype=sample_type, count=size // 4)
-            a = reshape(a, (channel_count, -1), order='F')
+            a = frombuffer(buffer, dtype=sample_type, count=size // bytes_per_sample_mono)
+            a = reshape(a, (audio_source.channel_count, -1), order='F')
             return a
 
         def read_n_bytes(n):
@@ -345,11 +351,12 @@ def _read_audio_blocks(in_path, channel_count, samples_per_block, tracks: List[T
                 assert read_size == n
                 yield make_array(b, read_size)
 
-        track_count = len(tracks)
+        track_count = len(audio_source.tracks)
         for ti in range(track_count):
             if track_count == ti + 1:
                 bytes_to_read = None
             else:
-                samples_to_read = tracks[ti + 1].offset_samples - tracks[ti].offset_samples
+                samples_to_read = seconds_to_samples(audio_source.tracks[ti + 1].offset_seconds) \
+                                  - seconds_to_samples(audio_source.tracks[ti].offset_seconds)
                 bytes_to_read = samples_to_read * bytes_per_sample
             yield read_n_bytes(bytes_to_read)

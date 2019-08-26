@@ -175,7 +175,22 @@ def analyze_dr(in_path: str, track_cb, keep_precision: bool):
             yield track_info, dr_metrics
 
     def analyze_part(map_impl, audio_info_part: AudioSourceInfo):
-        audio_data = read_audio_data(audio_info_part, 3 * MEASURE_SAMPLE_RATE)
+        ffmpeg_args = (
+            '-loglevel', 'fatal',
+            '-i', audio_info_part.file_path,
+            '-map', '0:a:0',
+            '-c:a', 'pcm_f32le',
+            '-ar', str(MEASURE_SAMPLE_RATE),
+            # ^ because apparently official meter resamples to 44k before measuring;
+            # using default low quality resampling because it doesn't affect measurements and is faster
+            '-f', 'f32le',
+            '-')
+        audio_data = read_audio_data(audio_info_part,
+                                     samples_per_block=3 * MEASURE_SAMPLE_RATE,
+                                     ffmpeg_args=ffmpeg_args,
+                                     bytes_per_sample_mono=4,
+                                     numpy_sample_type='<f4',
+                                     sample_rate=MEASURE_SAMPLE_RATE)
         return audio_info_part, analyze_part_tracks(audio_data, audio_info_part, map_impl)
 
     dr_items = []
@@ -205,6 +220,7 @@ def analyze_dr(in_path: str, track_cb, keep_precision: bool):
         return process_results(audio_info_part, analyzed_tracks)
 
     for x in map_impl_outer(functools.partial(process_part, map_impl_inner), audio_info):
+        # noinspection PyUnusedLocal
         for track_result in x:
             pass  # we need to go through all items for the side effects
 
