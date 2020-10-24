@@ -300,7 +300,7 @@ def read_audio_file_metadata(in_path) -> AudioFileMetadata:
     returncode = p.returncode
     if returncode != 0:
         raise Exception('ffprobe returned {}'.format(returncode))
-    audio_metadata = _parse_audio_metadata(in_path, json.loads(out, encoding='utf-8'))
+    audio_metadata = _parse_audio_metadata(in_path, json.loads(out))
     assert audio_metadata.channel_count >= 1
     return audio_metadata
 
