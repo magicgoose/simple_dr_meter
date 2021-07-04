@@ -5,7 +5,6 @@ import os
 import sys
 import time
 from datetime import datetime
-from sys import stderr
 from typing import Iterable, Tuple, NamedTuple
 
 import numpy
@@ -111,8 +110,6 @@ def main():
 
     input_path = os.path.expanduser(args.input)
     input_path = os.path.abspath(input_path)
-
-    print(f'Absolute input path = {input_path}', file=stderr)
 
     should_write_log = not args.no_log and not args.keep_precision
     keep_precision = args.keep_precision
