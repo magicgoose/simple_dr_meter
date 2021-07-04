@@ -5,6 +5,7 @@ import os
 import sys
 import time
 from datetime import datetime
+from sys import stderr
 from typing import Iterable, Tuple, NamedTuple
 
 import numpy
@@ -108,12 +109,16 @@ def main():
     if not args:
         return
 
-    in_path = os.path.expanduser(args.input)
+    input_path = os.path.expanduser(args.input)
+    input_path = os.path.abspath(input_path)
+
+    print(f'Absolute input path = {input_path}', file=stderr)
+
     should_write_log = not args.no_log and not args.keep_precision
     keep_precision = args.keep_precision
 
     if should_write_log:
-        log_path = get_log_path(in_path)
+        log_path = get_log_path(input_path)
         if os.path.exists(log_path):
             sys.exit('the log file already exists!')
 
@@ -123,7 +128,7 @@ def main():
         print(f"{track_info.global_index:02d} - {title}: {dr_formatted}")
 
     time_start = time.time()
-    dr_log_items, dr_mean, dr_median = analyze_dr(in_path, track_cb, keep_precision)
+    dr_log_items, dr_mean, dr_median = analyze_dr(input_path, track_cb, keep_precision)
     print(f'Official DR = {dr_mean}, Median DR = {dr_median}')
     print(f'Analyzed all tracks in {time.time() - time_start:.2f} seconds')
 
