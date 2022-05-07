@@ -95,6 +95,9 @@ def parse_args():
     ap.add_argument("--no-log", help='Do not write log (dr.txt), by default a log file is written after analysis',
                     action='store_true')
     ap.add_argument("--keep-precision", help='Do not round values, this also disables log', action='store_true')
+    ap.add_argument("--no-resample", help='Do not resample everything to 44.1kHz (unlike the "standard" meter), '
+                                          'this also disables log',
+                    action='store_true')
     args = sys.argv[1:]
     if args:
         return ap.parse_args(args)
@@ -111,8 +114,12 @@ def main():
     input_path = os.path.expanduser(args.input)
     input_path = os.path.abspath(input_path)
 
-    should_write_log = not args.no_log and not args.keep_precision
+    should_write_log = \
+        not args.no_log \
+        and not args.keep_precision \
+        and not args.no_resample
     keep_precision = args.keep_precision
+    no_resample = args.no_resample
 
     if should_write_log:
         log_path = get_log_path(input_path)
@@ -125,7 +132,9 @@ def main():
         print(f"{track_info.global_index:02d} - {title}: {dr_formatted}")
 
     time_start = time.time()
-    dr_log_items, dr_mean, dr_median = analyze_dr(input_path, track_cb, keep_precision)
+    dr_log_items, dr_mean, dr_median = analyze_dr(
+        input_path, track_cb, keep_precision, no_resample,
+    )
     print(f'Official DR = {dr_mean}, Median DR = {dr_median}')
     print(f'Analyzed all tracks in {time.time() - time_start:.2f} seconds')
 
@@ -141,7 +150,7 @@ def main():
 
 
 def fix_tty():
-    """I don't know why this is needed, but it is. Otherwise the terminal may cease to
+    """I don't know why this is needed, but it is. Otherwise, the terminal may cease to
     accept any keyboard input after this application finishes. Hopefully I will find
     something better eventually."""
     platform = sys.platform.lower()
@@ -150,7 +159,12 @@ def fix_tty():
             os.system('stty sane')
 
 
-def analyze_dr(in_path: str, track_cb, keep_precision: bool):
+def analyze_dr(
+        in_path: str,
+        track_cb,
+        keep_precision: bool,
+        no_resample: bool,
+):
     audio_info = tuple(read_audio_info(in_path))
     num_files = len(audio_info)
     assert num_files > 0
@@ -177,22 +191,37 @@ def analyze_dr(in_path: str, track_cb, keep_precision: bool):
             yield track_info, dr_metrics
 
     def analyze_part(map_impl, audio_info_part: AudioSourceInfo):
-        ffmpeg_args = (
+        ffmpeg_args = []
+        ffmpeg_args += [
             '-loglevel', 'fatal',
             '-i', audio_info_part.file_path,
             '-map', '0:a:0',
             '-c:a', 'pcm_f32le',
-            '-ar', str(MEASURE_SAMPLE_RATE),
-            # ^ because apparently official meter resamples to 44k before measuring;
-            # using default low quality resampling because it doesn't affect measurements and is faster
+        ]
+
+        if not no_resample:
+            ffmpeg_args += [
+                '-ar', str(MEASURE_SAMPLE_RATE),
+                # ^ because apparently official meter resamples to 44k before measuring;
+                # using default low quality resampling because it doesn't affect measurements and is faster
+            ]
+
+        ffmpeg_args += [
             '-f', 'f32le',
-            '-')
+            '-',
+        ]
+
+        if no_resample:
+            sample_rate = audio_info_part.sample_rate
+        else:
+            sample_rate = MEASURE_SAMPLE_RATE
+
         audio_data = read_audio_data(audio_info_part,
-                                     samples_per_block=3 * MEASURE_SAMPLE_RATE,
+                                     samples_per_block=3 * sample_rate,
                                      ffmpeg_args=ffmpeg_args,
                                      bytes_per_sample_mono=4,
                                      numpy_sample_type='<f4',
-                                     sample_rate=MEASURE_SAMPLE_RATE)
+                                     sample_rate=sample_rate)
         return audio_info_part, analyze_part_tracks(audio_data, audio_info_part, map_impl)
 
     dr_items = []
@@ -232,8 +261,7 @@ def analyze_dr(in_path: str, track_cb, keep_precision: bool):
         dr_mean_rounded = int(numpy.round(numpy.mean(dr_items)))  # official
     dr_median = numpy.median(dr_items)
 
-    dr_log_items = make_log_groups(dr_log_items)
-    return dr_log_items, dr_mean_rounded, dr_median
+    return make_log_groups(dr_log_items), dr_mean_rounded, dr_median
 
 
 if __name__ == '__main__':

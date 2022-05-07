@@ -287,6 +287,9 @@ def _parse_audio_metadata(in_path: str, data_from_ffprobe: dict) -> AudioFileMet
 
 
 def read_audio_file_metadata(in_path) -> AudioFileMetadata:
+    if not path.exists(in_path):
+        raise ValueError(f'Path "{in_path}" doesn''t exist')
+
     p = sp.Popen(
         (ex_ffprobe,
          '-v', 'error',
@@ -320,7 +323,7 @@ def _read_audio_blocks(audio_source: AudioSourceInfo,
         return int(sample_rate * seconds)
 
     # noinspection PyTypeChecker
-    p = sp.Popen((ex_ffmpeg,) + ffmpeg_args, stderr=None, stdout=PIPE)
+    p = sp.Popen([ex_ffmpeg] + ffmpeg_args, stderr=None, stdout=PIPE)
 
     sample_type = np.dtype(numpy_sample_type)
     frombuffer = np.frombuffer

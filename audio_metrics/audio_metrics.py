@@ -38,7 +38,9 @@ def decibel(a):
     return np.log10(a) * 20
 
 
-def compute_dr(pool, a: AudioSourceInfo, samples: Iterator[np.ndarray], keep_precision: bool) -> DynamicRangeMetrics:
+def compute_dr(pool, a: AudioSourceInfo, samples: Iterator[np.ndarray],
+               keep_precision: bool,
+               ) -> DynamicRangeMetrics:
     channel_count = a.channel_count
 
     sample_count = [0]
