@@ -1,5 +1,4 @@
 import itertools
-import json
 import os
 import subprocess as sp
 import sys
@@ -9,6 +8,7 @@ from os import path
 from subprocess import DEVNULL, PIPE
 from typing import NamedTuple, Iterator, Iterable, List, Optional, Sequence
 
+import mutagen
 import numpy as np
 
 from audio_io.cue.cue_parser import CueCmd, parse_cue_str, read_cue_from_file
@@ -63,11 +63,11 @@ _tag_alternatives = {
 def get_tag_with_alternatives(tags: dict, tag_key: TagKey) -> Optional[str]:
     exact_match = tags.get(tag_key)
     if exact_match:
-        return exact_match
+        return exact_match[0]
     for alt_key in _tag_alternatives.get(tag_key, ()):
         v = tags.get(alt_key)
         if v:
-            return v
+            return v[0]
     return None
 
 
@@ -267,43 +267,25 @@ def _test_ffmpeg():
         sys.exit('ffmpeg not installed, broken or not on PATH')
 
 
-def _parse_audio_metadata(in_path: str, data_from_ffprobe: dict) -> AudioFileMetadata:
-    def get(*keys, default_value=None):
-        d = data_from_ffprobe
-        for k in keys:
-            try:
-                d = d[k]
-            except (KeyError, IndexError):
-                return default_value
-        return d
-
-    tags = {key.upper(): val for key, val in get('format', 'tags', default_value={}).items()}
+def _parse_audio_metadata(in_path: str, mutagen_file) -> AudioFileMetadata:
+    def get_sample_rate(mutagen_file):
+        if isinstance(mutagen_file, mutagen.oggopus.OggOpus):
+            return 48000
+        return mutagen_file.info.sample_rate
+    
     return AudioFileMetadata(
         file_path=in_path,
-        channel_count=int(get('streams', 0, 'channels')),
-        sample_rate=int(get('streams', 0, 'sample_rate')),
-        tags=tags,
-        cuesheet=tags.get(TagKey.CUESHEET))
+        channel_count=mutagen_file.info.channels,
+        sample_rate=get_sample_rate(mutagen_file),
+        tags=mutagen_file.tags,
+        cuesheet=mutagen_file.get(TagKey.CUESHEET, None))
 
 
 def read_audio_file_metadata(in_path) -> AudioFileMetadata:
     if not path.exists(in_path):
         raise ValueError(f'Path "{in_path}" doesn''t exist')
 
-    p = sp.Popen(
-        (ex_ffprobe,
-         '-v', 'error',
-         '-print_format', 'json',
-         '-select_streams', 'a:0',
-         '-show_entries', 'stream=channels,sample_rate',
-         '-show_entries', 'format_tags',
-         in_path),
-        stdout=PIPE, stderr=PIPE)
-    out, err = p.communicate()
-    returncode = p.returncode
-    if returncode != 0:
-        raise Exception('ffprobe returned {}'.format(returncode))
-    audio_metadata = _parse_audio_metadata(in_path, json.loads(out))
+    audio_metadata = _parse_audio_metadata(in_path, mutagen.File(in_path, easy=True))
     assert audio_metadata.channel_count >= 1
     return audio_metadata
 
